@@ -1,0 +1,56 @@
+# tpt-asn1 Design Document
+
+**Project name:** tpt-asn1  
+**Domain:** Cryptographic Certificates, PKI, and ASN.1 Parsing  
+**License:** MIT OR Apache-2.0  
+**Implementation model:** Clean-room, memory-safe  
+
+---
+
+## 1. Summary & Vision
+`tpt-asn1` is a memory-safe, zero-copy ASN.1 DER/BER parser and X.509 Public Key Infrastructure (PKI) toolkit. 
+
+The internet's cryptographic foundation relies on ASN.1, a 1980s binary format notorious for causing critical buffer overflow CVEs in C/C++ parsers (like OpenSSL). `tpt-asn1` replaces fragile byte-munging with a strictly typed, mathematically sound Rust AST that rejects malformed certificates at the boundary, ensuring memory safety without sacrificing performance.
+
+## 2. Design Principles
+- **Zero-Copy by Default:** Parse DER/BER tags and lengths without allocating, borrowing directly from the input TLS/TCP buffer.
+- **Fail-Closed Security:** Malformed lengths, indefinite lengths, or non-canonical DER encodings are rejected immediately.
+- **Type-Safe Cryptography:** Certificate extensions (SubjectAltName, KeyUsage) are represented as strongly typed Rust enums, not opaque byte blobs.
+- **No C Dependencies:** Pure Rust implementation of ASN.1, X.509, PKCS#7, and CMS.
+
+## 3. Scope & Architecture
+```text
+.tpt-asn1 Schema (optional DSL) -> tpt-asn1-compiler -> Rust AST
+Raw DER/BER Bytes -> tpt-asn1-core -> Typed X.509/CMS Structs
+```
+
+### Components
+- `tpt-asn1-core`: Low-level DER/BER/CER tag-length-value (TLV) codec.
+- `tpt-x509`: X.509v3 certificate validation, chain building, and path resolution.
+- `tpt-cms`: Cryptographic Message Syntax (PKCS#7) for signed/encrypted payloads.
+- `tpt-cli`: A modern, safe replacement for `openssl x509` and `openssl req`.
+
+## 4. Core Engine & Wire Format
+ASN.1 DER is inherently a TLV (Tag-Length-Value) format. 
+- **Tags:** Parsed into a `Tag` enum (Universal, Application, Context-specific, Private) with primitive/constructed flags.
+- **Lengths:** Strictly validated. Indefinite lengths are rejected in DER mode. Overlong encodings are rejected.
+- **Values:** Handled via zero-copy slices (`&[u8]`). BitStrings and OctetStrings borrow directly from the source buffer.
+
+## 5. Tooling & CLI
+The `tpt-asn1` CLI provides deep inspection without executing unsafe code:
+```sh
+tpt-asn1 inspect cert.pem         # Pretty-print ASN.1 structure
+tpt-asn1 validate chain.pem       # Verify X.509 chain against system roots
+tpt-asn1 fuzz < input.der         # Run built-in differential fuzzer against OpenSSL
+```
+
+## 6. Security & Safety
+- **Bounded Recursion:** Limits constructed type nesting depth to prevent stack exhaustion.
+- **Allocation Limits:** Caps the maximum size of any single ASN.1 element to prevent OOM attacks.
+- **Constant-Time Comparisons:** Ensures signature and MAC verifications use constant-time byte comparison to prevent timing attacks.
+
+## 7. Acceptance Criteria
+1. Passes all NIST PKITS (Public Key Interoperability Test Suite) vectors.
+2. Successfully parses 100% of certificates in the Cisco Umbrella Top 1M without panicking.
+3. Zero `unsafe` blocks in the core DER parsing path.
+4. Differential testing confirms exact byte-for-byte parity with OpenSSL's DER output.
