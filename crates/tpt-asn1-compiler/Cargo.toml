@@ -1,0 +1,21 @@
+[package]
+name = "tpt-asn1-compiler"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Optional .tpt-asn1 DSL to Rust code generator (scaffold)"
+readme = "../README.md"
+
+[dependencies]
+tpt-asn1-core = { workspace = true }
+
+[features]
+default = ["std", "alloc"]
+std = ["alloc"]
+alloc = []

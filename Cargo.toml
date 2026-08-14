@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/tpt-asn1-core",
+    "crates/tpt-asn1-compiler",
+    "crates/tpt-x509",
+    "crates/tpt-cms",
+    "crates/tpt-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74.0"
+license = "MIT OR Apache-2.0"
+authors = ["TPT Solutions"]
+repository = "https://github.com/tpt-solutions/tpt-asn1"
+homepage = "https://github.com/tpt-solutions/tpt-asn1"
+keywords = ["asn1", "der", "ber", "x509", "pki"]
+categories = ["cryptography", "encoding", "parser-implementations"]
+
+[workspace.dependencies]
+tpt-asn1-core = { version = "0.1.0", path = "crates/tpt-asn1-core" }
+tpt-x509 = { version = "0.1.0", path = "crates/tpt-x509" }
+tpt-cms = { version = "0.1.0", path = "crates/tpt-cms" }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "unwind"

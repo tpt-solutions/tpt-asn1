@@ -1,0 +1,25 @@
+[package]
+name = "tpt-asn1-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Zero-copy, no_std ASN.1 DER/BER/CER TLV codec with fail-closed parsing"
+readme = "../README.md"
+
+[features]
+default = ["std", "alloc"]
+std = ["alloc"]
+alloc = []
+
+[dependencies]
+
+[dev-dependencies]
+
+[package.metadata.docs.rs]
+all-features = true

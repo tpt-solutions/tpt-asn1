@@ -1,0 +1,22 @@
+[package]
+name = "tpt-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Command-line ASN.1 / X.509 / CMS toolkit"
+readme = "../README.md"
+
+[[bin]]
+name = "tpt-asn1"
+path = "src/main.rs"
+
+[dependencies]
+tpt-asn1-core = { workspace = true }
+clap = { version = "=4.5.20", features = ["derive"] }
+clap_complete = "=4.5.2"

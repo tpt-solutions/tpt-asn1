@@ -1,0 +1,21 @@
+[package]
+name = "tpt-x509"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "X.509v3 certificate parsing, validation, and chain building (scaffold)"
+readme = "../README.md"
+
+[dependencies]
+tpt-asn1-core = { workspace = true }
+
+[features]
+default = ["std", "alloc"]
+std = ["alloc"]
+alloc = []

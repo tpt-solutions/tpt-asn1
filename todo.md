@@ -4,43 +4,43 @@ License: MIT OR Apache-2.0 · Copyright TPT Solutions
 Release model: single v1.0 (phases below are tracking buckets, not separate published versions)
 
 ## Phase 1 — Project Foundation & Governance
-- [ ] Initialize git repo, `.gitignore`, top-level `README.md`
-- [ ] Create Cargo workspace (`Cargo.toml` with `[workspace]` members)
-- [ ] Add `LICENSE-MIT` and `LICENSE-APACHE` (copyright TPT Solutions)
-- [ ] Set `license = "MIT OR Apache-2.0"` in every crate's `Cargo.toml`
-- [ ] Add SPDX license header convention for source files
-- [ ] Write `CONTRIBUTING.md`
-- [ ] Write `SECURITY.md` (vulnerability disclosure process — important given crypto/PKI scope)
-- [ ] Write `CODE_OF_CONDUCT.md`
-- [ ] Decide Rust edition (2021) and MSRV; add `rust-toolchain.toml`
-- [ ] Add `rustfmt.toml` and `clippy.toml` (deny warnings)
-- [ ] Scaffold crate skeletons: `tpt-asn1-core`, `tpt-asn1-compiler`, `tpt-x509`, `tpt-cms`, `tpt-cli`
-- [ ] Set up GitHub Actions CI: build+test matrix (Linux/macOS/Windows × stable/beta/MSRV)
-- [ ] Add `no_std` target check to CI (e.g. `thumbv7em-none-eabi`) for `tpt-asn1-core`
-- [ ] Reserve crates.io namespace for all five crate names
-- [ ] Add `cargo-deny`/`cargo-audit` CI job (license + advisory scanning)
+- [x] Initialize git repo, `.gitignore`, top-level `README.md`
+- [x] Create Cargo workspace (`Cargo.toml` with `[workspace]` members)
+- [x] Add `LICENSE-MIT` and `LICENSE-APACHE` (copyright TPT Solutions)
+- [x] Set `license = "MIT OR Apache-2.0"` in every crate's `Cargo.toml`
+- [x] Add SPDX license header convention for source files
+- [x] Write `CONTRIBUTING.md`
+- [x] Write `SECURITY.md` (vulnerability disclosure process — important given crypto/PKI scope)
+- [x] Write `CODE_OF_CONDUCT.md`
+- [x] Decide Rust edition (2021) and MSRV; add `rust-toolchain.toml`
+- [x] Add `rustfmt.toml` and `clippy.toml` (deny warnings)
+- [x] Scaffold crate skeletons: `tpt-asn1-core`, `tpt-asn1-compiler`, `tpt-x509`, `tpt-cms`, `tpt-cli`
+- [x] Set up GitHub Actions CI: build+test matrix (Linux/macOS/Windows × stable/beta/MSRV)
+- [x] Add `no_std` target check to CI (e.g. `thumbv7em-none-eabi`) for `tpt-asn1-core`
+- [ ] Reserve crates.io namespace for all five crate names (requires crates.io account — manual)
+- [x] Add `cargo-deny`/`cargo-audit` CI job (license + advisory scanning)
 
 ## Phase 2 — `tpt-asn1-core`: DER/BER/CER TLV Codec (`no_std`, `no_alloc`, zero-copy)
-- [ ] Design `Tag` type: class (Universal/Application/Context/Private), primitive vs constructed, multi-byte high-tag-number form
-- [ ] Design `Length` decoding: short-form, long-form definite; reject overlong/non-minimal encodings in DER mode
-- [ ] Implement indefinite-length support for BER (with end-of-contents octets) and CER (always-indefinite constructed encoding)
-- [ ] Core zero-copy TLV reader: borrows value bytes as `&[u8]` from the input buffer
-- [ ] Bounded recursion depth guard for nested constructed types (configurable, sane default)
-- [ ] Max-element-size guard to reject oversized length claims against remaining buffer (OOM/DoS defense)
-- [ ] Encoding-rule-specific validation modes: strict DER, lenient BER, canonical CER (incl. CER's 1000-octet string fragmentation rule)
-- [ ] Universal type decoders: `BOOLEAN`, `INTEGER` (arbitrary precision via byte slice), `BIT STRING` (unused-bits handling), `OCTET STRING`, `NULL`, `OBJECT IDENTIFIER` (arc iterator, no alloc), `RELATIVE-OID`, `ENUMERATED`
-- [ ] String type decoders: `UTF8String`, `PrintableString`, `IA5String`, `TeletexString`, `BMPString`, `UniversalString`, etc.
-- [ ] Time type decoders: `UTCTime`, `GeneralizedTime` (with validation of date-time grammar)
-- [ ] Structured type decoders: `SEQUENCE`/`SEQUENCE OF`, `SET`/`SET OF` (incl. DER canonical sort-order validation for `SET OF`)
-- [ ] `Any`/deferred-decode wrapper for lazy typed decoding of nested content
-- [ ] Core `Decode`/`Encode` trait pair (foundational API other crates build on)
-- [ ] DER canonical encoder (writer into caller-provided buffer, no_alloc-friendly)
-- [ ] Constant-time byte comparison utility (shared primitive used later by x509/cms)
-- [ ] Hand-written DER/BER/CER test vectors covering edge cases (empty sequences, max nesting, boundary lengths, high tag numbers)
-- [ ] Property-based round-trip tests (`encode(decode(x)) == x`) via `proptest`
-- [ ] `cargo-fuzz` target: arbitrary bytes must never panic (core parser)
-- [ ] `#![forbid(unsafe_code)]` on the core parsing path
-- [ ] Rustdoc for all public API, module-level docs explaining the TLV model
+- [x] Design `Tag` type: class (Universal/Application/Context/Private), primitive vs constructed, multi-byte high-tag-number form
+- [x] Design `Length` decoding: short-form, long-form definite; reject overlong/non-minimal encodings in DER mode
+- [x] Implement indefinite-length support for BER (with end-of-contents octets) and CER (always-indefinite constructed encoding)
+- [x] Core zero-copy TLV reader: borrows value bytes as `&[u8]` from the input buffer
+- [x] Bounded recursion depth guard for nested constructed types (configurable, sane default)
+- [x] Max-element-size guard to reject oversized length claims against remaining buffer (OOM/DoS defense)
+- [x] Encoding-rule-specific validation modes: strict DER, lenient BER, canonical CER (incl. CER's 1000-octet string fragmentation rule)
+- [x] Universal type decoders: `BOOLEAN`, `INTEGER` (arbitrary precision via byte slice), `BIT STRING` (unused-bits handling), `OCTET STRING`, `NULL`, `OBJECT IDENTIFIER` (arc iterator, no alloc), `RELATIVE-OID`, `ENUMERATED`
+- [x] String type decoders: `UTF8String`, `PrintableString`, `IA5String`, `TeletexString`, `BMPString`, `UniversalString`, etc.
+- [x] Time type decoders: `UTCTime`, `GeneralizedTime` (with validation of date-time grammar)
+- [x] Structured type decoders: `SEQUENCE`/`SEQUENCE OF`, `SET`/`SET OF` (incl. DER canonical sort-order validation for `SET OF`)
+- [x] `Any`/deferred-decode wrapper for lazy typed decoding of nested content
+- [x] Core `Decode`/`Encode` trait pair (foundational API other crates build on)
+- [x] DER canonical encoder (writer into caller-provided buffer, no_alloc-friendly)
+- [x] Constant-time byte comparison utility (shared primitive used later by x509/cms)
+- [x] Hand-written DER/BER/CER test vectors covering edge cases (empty sequences, max nesting, boundary lengths, high tag numbers)
+- [ ] Property-based round-trip tests (`encode(decode(x)) == x`) via `proptest` — deferred: pinned toolchain (1.81) cannot build `getrandom 0.4`; deterministic round-trip matrix in place instead
+- [ ] `cargo-fuzz` target: arbitrary bytes must never panic (core parser) — pending Phase 7
+- [x] `#![forbid(unsafe_code)]` on the core parsing path
+- [ ] Rustdoc for all public API, module-level docs explaining the TLV model (set to `warn` pending Phase 8 promotion to `deny`)
 
 ## Phase 3 — `.tpt-asn1` DSL & `tpt-asn1-compiler` (built alongside core)
 - [ ] Design DSL grammar: modules, `SEQUENCE`/`CHOICE`/`SET` types, IMPLICIT/EXPLICIT tagging, OPTIONAL/DEFAULT fields
@@ -93,15 +93,20 @@ Release model: single v1.0 (phases below are tracking buckets, not separate publ
 - [ ] Test vectors: OpenSSL-generated `smime`/`cms` messages, cross-verified via external `openssl` CLI during test authoring only
 
 ## Phase 6 — `tpt-cli`: Command-Line Toolkit
-- [ ] `tpt-asn1 inspect <file>`: generic DER/BER/CER pretty-printer with PEM auto-detection
-- [ ] `tpt-asn1 validate <chain.pem>`: chain validation against system/bundled roots or `--roots <file>`, with clear pass/fail + reason output
-- [ ] `tpt-asn1 fuzz < input.der`: differential fuzzer shelling out to external `openssl asn1parse`/`openssl x509`, diffing structurally
-- [ ] Byte-for-byte DER output parity test suite vs. OpenSSL (ties to acceptance criteria #4)
-- [ ] `openssl req`-equivalent: CSR / self-signed cert generation (needs core's DER encoder + key generation via the crypto backend)
-- [ ] `-text`-style human-readable cert dump matching `openssl x509 -text` ergonomics
-- [ ] CLI argument parsing (clap), JSON output mode for scripting, sensible exit codes
-- [ ] End-to-end CLI snapshot tests
-- [ ] `--help` polish, shell completion generation, man pages
+- [x] `tpt-asn1 inspect <file>`: generic DER/BER/CER pretty-printer with PEM auto-detection (incl. `--json`, `--try-der`, `--show-bytes`, `--rule`, `--max-depth`)
+- [x] `tpt-asn1 validate <chain.pem>`: structural certificate-chain inspection against `--roots <file>`; full RFC 5280 §6.1 path validation is deferred to `tpt-x509` (Phase 4, not yet integrated) — noted in output
+- [x] `tpt-asn1 fuzz <inputs…>`: differential fuzzer diffing `tpt-asn1` against external `openssl asn1parse` (acceptance + element-count), walking files/dirs; warns if OpenSSL absent
+- [ ] Byte-for-byte DER output parity test suite vs. OpenSSL (ties to acceptance criteria #4) — blocked on `tpt-asn1-core` DER re-encode round-trip; `fuzz` provides structural differential coverage in the meantime
+- [ ] `openssl req`-equivalent: CSR / self-signed cert generation — blocked on pluggable crypto backend + `tpt-x509` (Phase 4/5); `req` subcommand prints a clear "not yet implemented" notice (exit 2)
+- [x] `-text`-style human-readable cert dump (`tpt-asn1 text <cert>`); full typed field decoding (issuer/validity/extensions) deferred to `tpt-x509` (Phase 4) — noted in output
+- [x] CLI argument parsing (clap, pinned to 4.5.x for the 1.81 MSRV), JSON output mode for scripting, sensible exit codes
+- [x] End-to-end CLI snapshot tests (`crates/tpt-cli/tests/cli.rs`, 8 passing)
+- [x] `--help` polish (clap derive) and shell completion generation (`completions --shell bash|zsh|fish|powershell`); man pages pending
+
+### Phase 6 prerequisite fixes (unblocking the workspace)
+- [x] Added `tpt-x509` / `tpt-cms` to `[workspace.dependencies]` (pre-existing manifest break stopped the whole workspace from loading)
+- [x] Added `crates/tpt-x509/src/crypto.rs` stub implementing the pluggable `SignatureBackend` trait (Phase 4 item 75) referenced by `tpt-x509/src/lib.rs`
+- [x] Removed pre-existing unused-import warnings in `tpt-asn1-core/src/decode.rs` that would fail CI's `-D warnings` gate
 
 ## Phase 7 — Security Hardening & Compliance Gates
 - [ ] Enforce `#![forbid(unsafe_code)]` across all parsing crates via CI lint (acceptance criteria #3)

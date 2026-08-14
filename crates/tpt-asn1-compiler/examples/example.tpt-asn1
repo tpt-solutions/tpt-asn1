@@ -1,0 +1,50 @@
+-- Example schema exercising the .tpt-asn1 DSL. Used by the dogfood test.
+module ExamplePKI {
+
+    -- A real-world X.509 AlgorithmIdentifier (parameters are usually NULL).
+    AlgorithmIdentifier ::= SEQUENCE {
+        algorithm OBJECT IDENTIFIER,
+        parameters NULL OPTIONAL
+    }
+
+    Color ::= ENUMERATED { red(0), green(1), blue(2) }
+
+    AttributeTypeAndValue ::= SEQUENCE {
+        type OBJECT IDENTIFIER,
+        value UTF8String
+    }
+
+    RelativeDistinguishedName ::= SET OF AttributeTypeAndValue
+
+    Name ::= SEQUENCE OF RelativeDistinguishedName
+
+    SubjectPublicKeyInfo ::= SEQUENCE {
+        algorithm AlgorithmIdentifier,
+        subjectPublicKey BIT STRING,
+        criticalFlag [0] IMPLICIT BOOLEAN DEFAULT FALSE,
+        customData [1] EXPLICIT OCTET STRING OPTIONAL,
+        extensions [2] IMPLICIT SEQUENCE OF OBJECT IDENTIFIER
+    }
+
+    Extension ::= SEQUENCE {
+        extnID OBJECT IDENTIFIER,
+        critical BOOLEAN DEFAULT FALSE,
+        extnValue OCTET STRING
+    }
+
+    Extensions ::= SEQUENCE OF Extension
+
+    -- CHOICE with IMPLICIT and EXPLICIT alternatives (cf. X.509 GeneralName).
+    GeneralName ::= CHOICE {
+        dNSName [0] IMPLICIT IA5String,
+        rfc822Name [1] IMPLICIT IA5String,
+        uniformResourceIdentifier [2] IMPLICIT IA5String,
+        directoryName [3] EXPLICIT Name
+    }
+
+    GeneralNames ::= SEQUENCE OF GeneralName
+
+    CertificateSerialNumber ::= INTEGER
+
+    SignatureValue ::= BIT STRING
+}
