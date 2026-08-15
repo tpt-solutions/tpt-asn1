@@ -7,10 +7,10 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
-keywords.workspace = true
-categories.workspace = true
 description = "Zero-copy, no_std ASN.1 DER/BER/CER TLV codec with fail-closed parsing"
-readme = "../README.md"
+readme = "README.md"
+keywords = ["asn1", "der", "ber", "cer", "tlv"]
+categories = ["cryptography", "encoding", "parser-implementations", "data-structures", "no-std"]
 
 [features]
 default = ["std", "alloc"]

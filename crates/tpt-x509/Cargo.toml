@@ -7,10 +7,10 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
-keywords.workspace = true
-categories.workspace = true
 description = "X.509v3 certificate parsing, validation, and RFC 5280 6.1 chain building (no_std, fail-closed)"
-readme = "../README.md"
+readme = "README.md"
+keywords = ["x509", "asn1", "pki", "certificate", "der"]
+categories = ["cryptography", "parser-implementations"]
 
 [dependencies]
 tpt-asn1-core = { workspace = true }

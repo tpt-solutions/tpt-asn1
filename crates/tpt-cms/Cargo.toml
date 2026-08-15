@@ -7,10 +7,10 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
-keywords.workspace = true
-categories.workspace = true
 description = "Cryptographic Message Syntax (PKCS#7 / CMS, RFC 5652) — zero-copy, no_std parsing and verification"
-readme = "../README.md"
+readme = "README.md"
+keywords = ["cms", "pkcs7", "asn1", "pki", "der"]
+categories = ["cryptography", "parser-implementations"]
 
 [dependencies]
 tpt-asn1-core = { workspace = true }

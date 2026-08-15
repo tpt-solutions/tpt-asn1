@@ -7,13 +7,16 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
-keywords.workspace = true
-categories.workspace = true
 description = ".tpt-asn1 DSL to Rust code generator: hand-written lexer/parser and Decode/Encode emitter (no_std + alloc)"
-readme = "../README.md"
+readme = "README.md"
+keywords = ["asn1", "codegen", "der", "parser", "build"]
+categories = ["development-tools::build-utils", "encoding", "parser-implementations"]
 
 [dependencies]
 tpt-asn1-core = { workspace = true }
+
+[dev-dependencies]
+hex = "0.4"
 
 [features]
 default = ["std", "alloc"]

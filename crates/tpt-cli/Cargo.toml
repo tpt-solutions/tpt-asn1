@@ -7,10 +7,10 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
-keywords.workspace = true
-categories.workspace = true
 description = "Command-line ASN.1 / X.509 / CMS toolkit"
-readme = "../README.md"
+readme = "README.md"
+keywords = ["asn1", "x509", "cli", "pki", "inspector"]
+categories = ["command-line-utilities", "cryptography"]
 
 [[bin]]
 name = "tpt-asn1"

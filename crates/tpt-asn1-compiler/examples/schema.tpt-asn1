@@ -1,0 +1,20 @@
+-- Example schema for build.rs integration test
+module BuildTest {
+
+    SimpleSequence ::= SEQUENCE {
+        id INTEGER,
+        name UTF8String,
+        flag BOOLEAN DEFAULT FALSE
+    }
+
+    SimpleChoice ::= CHOICE {
+        intValue INTEGER,
+        strValue IA5String
+    }
+
+    Container ::= SEQUENCE {
+        seq SimpleSequence,
+        choice SimpleChoice OPTIONAL,
+        items SEQUENCE OF INTEGER
+    }
+}
