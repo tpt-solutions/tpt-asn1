@@ -3,7 +3,7 @@
 //! Certificate chain building and RFC 5280 §6.1 path validation.
 //!
 //! The implementation is fail-closed and delegates the actual signature math to
-//! a [`SignatureVerifier`](crate::verify::SignatureVerifier) backend so that
+//! a [`SignatureVerifier`] backend so that
 //! `tpt-x509` stays free of C dependencies. The validator enforces, in order:
 //!
 //! 1. path construction (issuer name / authority-key-id linking),
@@ -21,16 +21,15 @@ use alloc::vec::Vec;
 
 use crate::certificate::Certificate;
 use crate::extensions::{
-    AuthorityKeyIdentifier, CertificatePolicies, GeneralName, GeneralSubtree, NameConstraints,
+    AuthorityKeyIdentifier, CertificatePolicies, GeneralName, GeneralSubtree,
 };
 use crate::name::Name;
-use crate::oid;
 use crate::spki::SubjectPublicKeyInfo;
 use crate::time::UnixTime;
 use crate::verify::SignatureVerifier;
 
 /// A trusted root: a subject `Name`, its public key, and an optional key id.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct TrustAnchor<'a> {
     /// The trusted CA subject name.
     pub name: Name<'a>,
@@ -51,7 +50,7 @@ impl<'a> TrustAnchor<'a> {
             .flatten()
             .map(|s| s.as_bytes());
         TrustAnchor {
-            name: cert.tbs.subject,
+            name: cert.tbs.subject.clone(),
             public_key: cert.tbs.subject_public_key_info,
             key_id,
         }
@@ -137,6 +136,7 @@ enum IssuerRef<'a> {
     Anchor(&'a TrustAnchor<'a>),
 }
 
+#[allow(dead_code)]
 impl<'a> IssuerRef<'a> {
     fn subject_name(&self) -> &Name<'a> {
         match self {
@@ -176,13 +176,6 @@ impl<'a> IssuerRef<'a> {
             IssuerRef::Anchor(_) => None,
         }
     }
-
-    fn name_constraints(&self) -> Option<&NameConstraints<'a>> {
-        match self {
-            IssuerRef::Cert(c) => c.tbs.extensions.name_constraints().ok().flatten().as_ref(),
-            IssuerRef::Anchor(_) => None,
-        }
-    }
 }
 
 fn build_path<'a>(
@@ -204,21 +197,15 @@ fn build_path<'a>(
         }
         certs.push(current);
 
-        // Try to find an issuer among intermediates.
+        // Try to find an issuer among intermediates (excluding `current` itself,
+        // so a self-signed certificate never matches its own name), then among
+        // the trust anchors.
         let found = find_issuer(current, intermediates)
             .map(IssuerRef::Cert)
             .or_else(|| find_anchor(current, anchors).map(IssuerRef::Anchor));
 
         match found {
             Some(IssuerRef::Cert(issuer)) => {
-                if issuer.is_self_signed_name() {
-                    // A self-signed intermediate: if it is also a trust anchor we
-                    // stop; otherwise we still need an anchor above it.
-                    if let Some(a) = find_anchor(issuer, anchors) {
-                        anchor = a;
-                        break;
-                    }
-                }
                 current = issuer;
                 continue;
             }
@@ -239,11 +226,16 @@ fn find_issuer<'a>(
 ) -> Option<&'a Certificate<'a>> {
     let aki = cert.tbs.extensions.authority_key_identifier().ok().flatten();
     pool.iter().find(|c| {
+        // Never match a certificate to itself (a self-signed cert would otherwise
+        // resolve its own name and create a cycle).
+        if core::ptr::eq(*c, cert) {
+            return false;
+        }
         c.tbs.subject.der_eq(&cert.tbs.issuer)
             || matches!(
                 (&aki, c.tbs.extensions.subject_key_identifier().ok().flatten()),
                 (Some(a), Some(s)) if tpt_asn1_core::util::constant_time_eq(
-                    a.key_identifier.unwrap_or(&[]),
+                    a.key_identifier.unwrap_or(&[] as &[u8]),
                     s.as_bytes()
                 )
             )
@@ -257,7 +249,7 @@ fn find_anchor<'a>(cert: &'a Certificate<'a>, anchors: &'a [TrustAnchor<'a>]) ->
             || matches!(
                 (&aki, a.key_id),
                 (Some(ak), Some(kid)) if tpt_asn1_core::util::constant_time_eq(
-                    ak.key_identifier.unwrap_or(&[]),
+                    ak.key_identifier.unwrap_or(&[] as &[u8]),
                     kid
                 )
             )
@@ -270,8 +262,8 @@ fn validate_path<'a>(path: &ValidatedPath<'a>, config: PathConfig<'a>) -> Result
     let max_path = n.saturating_sub(1);
 
     // Accumulate name constraints from the CA certs in the path.
-    let mut permitted: Vec<&GeneralSubtree<'_>> = Vec::new();
-    let mut excluded: Vec<&GeneralSubtree<'_>> = Vec::new();
+    let mut permitted: Vec<GeneralSubtree<'a>> = Vec::new();
+    let mut excluded: Vec<GeneralSubtree<'a>> = Vec::new();
 
     for (i, cert) in path.certs.iter().enumerate() {
         // 2. Validity.
@@ -313,8 +305,8 @@ fn validate_path<'a>(path: &ValidatedPath<'a>, config: PathConfig<'a>) -> Result
 
         // 6. Name constraints (only enforce on CA certs, which carry them).
         if let Some(nc) = cert.tbs.extensions.name_constraints().ok().flatten() {
-            permitted.extend(nc.permitted.iter());
-            excluded.extend(nc.excluded.iter());
+            permitted.extend(nc.permitted);
+            excluded.extend(nc.excluded);
         }
         if !name_constraints_satisfied(cert, &permitted, &excluded) {
             return Err(PathError::NameConstraintViolation);
@@ -371,8 +363,8 @@ fn policy_acceptable(cert: &Certificate<'_>, _is_ee: bool) -> bool {
 /// subtree; SAN `dNSName` / `iPAddress` entries are likewise checked.
 fn name_constraints_satisfied<'a>(
     cert: &Certificate<'a>,
-    permitted: &[&GeneralSubtree<'a>],
-    excluded: &[&GeneralSubtree<'a>],
+    permitted: &[GeneralSubtree<'a>],
+    excluded: &[GeneralSubtree<'a>],
 ) -> bool {
     // Excluded: reject immediately on match.
     for st in excluded {
@@ -435,8 +427,6 @@ fn subtree_matches<'a>(st: &GeneralSubtree<'a>, cert: &Certificate<'a>) -> bool 
 
 fn dns_within(child: &[u8], parent: &[u8]) -> bool {
     // child is within parent if it equals parent or ends with "." + parent.
-    let child = child;
-    let parent = parent;
     if child.len() < parent.len() {
         return false;
     }

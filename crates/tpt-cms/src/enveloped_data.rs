@@ -120,7 +120,7 @@ fn decode_encrypted_content_info<'a>(
             if tag != Tag::context(false, 0) {
                 return Err(Error::UnexpectedStructure.into());
             }
-            Some(OctetString::decode(&mut Reader::new(value, tpt_asn1_core::reader::Config::der()))?)
+            Some(OctetString(value))
         };
         Ok(EncryptedContentInfo { content_type, content_encryption_algorithm, encrypted_content })
     })

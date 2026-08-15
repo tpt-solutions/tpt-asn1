@@ -297,6 +297,11 @@ impl<'a> ObjectIdentifier<'a> {
         OidIter { remaining: self.0 }
     }
 
+    /// The raw object-identifier subidentifier bytes (the value content).
+    pub fn as_bytes(&self) -> &'a [u8] {
+        self.0
+    }
+
     /// Returns `true` if this OID's components equal `expected`, splitting the
     /// combined first subidentifier into arcs 0 and 1 per X.660.
     pub fn matches(&self, expected: &[u64]) -> bool {

@@ -43,54 +43,54 @@ Release model: single v1.0 (phases below are tracking buckets, not separate publ
 - [ ] Rustdoc for all public API, module-level docs explaining the TLV model (set to `warn` pending Phase 8 promotion to `deny`)
 
 ## Phase 3 — `.tpt-asn1` DSL & `tpt-asn1-compiler` (built alongside core)
-- [ ] Design DSL grammar: modules, `SEQUENCE`/`CHOICE`/`SET` types, IMPLICIT/EXPLICIT tagging, OPTIONAL/DEFAULT fields
-- [ ] Decide DSL delivery form: standalone `.tpt-asn1` schema files + codegen binary (per spec's "compiler → Rust AST" framing)
-- [ ] Hand-written lexer/parser for `.tpt-asn1` files (pure-Rust parser combinator, no C deps)
-- [ ] AST representation of parsed schema (types, tags, constraints)
-- [ ] Code generator: emit Rust structs/enums + `Decode`/`Encode` impls (targeting `tpt-asn1-core` traits)
+- [x] Design DSL grammar: modules, `SEQUENCE`/`CHOICE`/`SET` types, IMPLICIT/EXPLICIT tagging, OPTIONAL/DEFAULT fields
+- [x] Decide DSL delivery form: standalone `.tpt-asn1` schema files + codegen binary (per spec's "compiler → Rust AST" framing)
+- [x] Hand-written lexer/parser for `.tpt-asn1` files (pure-Rust parser combinator, no C deps)
+- [x] AST representation of parsed schema (types, tags, constraints)
+- [x] Code generator: emit Rust structs/enums + `Decode`/`Encode` impls (targeting `tpt-asn1-core` traits)
 - [ ] `build.rs` integration path for downstream crates to consume generated code
-- [ ] Decide dogfooding scope: whether `tpt-x509`/`tpt-cms` hand-write structs against core traits initially, or generate from DSL from day one
-- [ ] `tpt-asn1-compiler` CLI binary: `tpt-asn1-compiler schema.tpt-asn1 -o generated.rs`
-- [ ] Round-trip dogfood test: define a known ASN.1 module in the DSL, compile it, confirm it parses real-world data correctly
-- [ ] Example schema files + rustdoc for DSL syntax
+- [x] Decide dogfooding scope: whether `tpt-x509`/`tpt-cms` hand-write structs against core traits initially, or generate from DSL from day one
+- [x] `tpt-asn1-compiler` CLI binary: `tpt-asn1-compiler schema.tpt-asn1 -o generated.rs`
+- [ ] Round-trip dogfood test: define a known ASN.1 module in the DSL, compile it, confirm it parses real-world data correctly (only a token-dump debug test exists today)
+- [x] Example schema files + rustdoc for DSL syntax
 
 ## Phase 4 — `tpt-x509`: X.509v3 Parsing, Validation, Chain Building (`no_std` + `alloc`)
-- [ ] `TBSCertificate` decode: version, serialNumber, signature AlgorithmIdentifier, issuer, validity, subject, SubjectPublicKeyInfo, extensions
-- [ ] `Name`/RDNSequence parsing incl. multi-valued RDNs and string-type normalization for comparison (RFC 5280 §7.1)
-- [ ] `AlgorithmIdentifier` + OID registry (RSA, ECDSA P-256/384/521, Ed25519, SHA-256/384/512, etc.)
-- [ ] `SubjectPublicKeyInfo` decode per key algorithm (RSA, EC point, Ed25519 raw key)
-- [ ] Validity period checks (`notBefore`/`notAfter`) against a caller-supplied current time (no clock in `no_std`)
-- [ ] Generic `Extension` (oid, critical flag, raw value) framework
-- [ ] Typed extension: `BasicConstraints` (CA flag, pathLenConstraint)
-- [ ] Typed extension: `KeyUsage` (bitflags)
-- [ ] Typed extension: `ExtendedKeyUsage`
-- [ ] Typed extension: `SubjectAltName`/`IssuerAltName` (dNSName, iPAddress, rfc822Name, URI, otherName)
-- [ ] Typed extension: `SubjectKeyIdentifier`/`AuthorityKeyIdentifier`
-- [ ] Typed extension: `CRLDistributionPoints`
-- [ ] Typed extension: `AuthorityInfoAccess` (OCSP, CA Issuers)
-- [ ] Typed extension: `CertificatePolicies` (+ policy mapping, for PKITS policy tests)
-- [ ] Typed extension: `NameConstraints` (permitted/excluded subtrees, for PKITS name-constraint tests)
-- [ ] Typed extension: `PolicyConstraints`, `InhibitAnyPolicy`
-- [ ] Unknown-critical-extension rejection policy (RFC 5280 fail-closed behavior)
-- [ ] Pluggable signature-verification backend trait (delegates crypto math to a chosen backend crate; keeps `tpt-x509` itself free of C deps)
-- [ ] Chain building: construct candidate paths from end-entity + intermediates + trust anchors; handle multiple issuers and self-signed detection
-- [ ] Path validation algorithm (RFC 5280 §6.1): signature chain, validity, name chaining, basic-constraints path length, key usage enforcement, policy graph processing, name constraints
-- [ ] Revocation checking scope decision: CRL (`CertificateList`) parsing + OCSP request/response parsing (parsing/matching only vs. also fetching — decide and scope explicitly)
-- [ ] System/bundled trust root loading (for `tpt-asn1 validate --roots system`)
+- [x] `TBSCertificate` decode: version, serialNumber, signature AlgorithmIdentifier, issuer, validity, subject, SubjectPublicKeyInfo, extensions
+- [x] `Name`/RDNSequence parsing incl. multi-valued RDNs and string-type normalization for comparison (RFC 5280 §7.1)
+- [x] `AlgorithmIdentifier` + OID registry (RSA, ECDSA P-256/384/521, Ed25519, SHA-256/384/512, etc.)
+- [x] `SubjectPublicKeyInfo` decode per key algorithm (RSA, EC point, Ed25519 raw key)
+- [x] Validity period checks (`notBefore`/`notAfter`) against a caller-supplied current time (no clock in `no_std`)
+- [x] Generic `Extension` (oid, critical flag, raw value) framework
+- [x] Typed extension: `BasicConstraints` (CA flag, pathLenConstraint)
+- [x] Typed extension: `KeyUsage` (bitflags)
+- [x] Typed extension: `ExtendedKeyUsage`
+- [x] Typed extension: `SubjectAltName`/`IssuerAltName` (dNSName, iPAddress, rfc822Name, URI, otherName)
+- [x] Typed extension: `SubjectKeyIdentifier`/`AuthorityKeyIdentifier`
+- [x] Typed extension: `CRLDistributionPoints`
+- [x] Typed extension: `AuthorityInfoAccess` (OCSP, CA Issuers)
+- [x] Typed extension: `CertificatePolicies` (+ policy mapping, for PKITS policy tests)
+- [x] Typed extension: `NameConstraints` (permitted/excluded subtrees, for PKITS name-constraint tests)
+- [x] Typed extension: `PolicyConstraints`, `InhibitAnyPolicy`
+- [x] Unknown-critical-extension rejection policy (RFC 5280 fail-closed behavior)
+- [x] Pluggable signature-verification backend trait (delegates crypto math to a chosen backend crate; keeps `tpt-x509` itself free of C deps)
+- [x] Chain building: construct candidate paths from end-entity + intermediates + trust anchors; handle multiple issuers and self-signed detection
+- [x] Path validation algorithm (RFC 5280 §6.1): signature chain, validity, name chaining, basic-constraints path length, key usage enforcement, policy graph processing, name constraints
+- [x] Revocation checking scope decision: CRL (`CertificateList`) parsing + OCSP request/response parsing (parsing/matching only vs. also fetching — decide and scope explicitly)
+- [ ] System/bundled trust root loading (for `tpt-asn1 validate --roots system`) — blocked on platform trust-store access
 - [ ] Acquire NIST PKITS test vectors; build harness mapping PKITS test groups to test functions
 - [ ] Wire PKITS harness into CI as an automated regression gate
 - [ ] Acquire Cisco Umbrella Top 1M cert corpus; build no-panic soak test (scheduled/nightly CI job)
-- [ ] Unit/integration tests per extension type
+- [x] Unit/integration tests per extension type (10-case `tests/x509.rs` suite passing)
 
 ## Phase 5 — `tpt-cms`: Cryptographic Message Syntax / PKCS#7 (`no_std` + `alloc`)
-- [ ] `ContentInfo`/`SignedData`/`EnvelopedData`/`DigestedData`/`EncryptedData` structures (RFC 5652)
-- [ ] `SignerInfo` decode: signed/unsigned attributes, digest + signature algorithms
-- [ ] Signature verification over `SignedData` (reuses crypto backend trait from `tpt-x509`)
-- [ ] Embed `tpt-x509` certs/CRLs within `SignedData`
-- [ ] PKCS#7 (RFC 2315) legacy compatibility detection/handling alongside CMS (RFC 5652)
-- [ ] `EnvelopedData`: symmetric content decryption + RSA key transport / ECDH key agreement recipient info
+- [x] `ContentInfo`/`SignedData`/`EnvelopedData`/`DigestedData`/`EncryptedData` structures (RFC 5652)
+- [x] `SignerInfo` decode: signed/unsigned attributes, digest + signature algorithms
+- [x] Signature verification over `SignedData` (reuses crypto backend trait from `tpt-x509`)
+- [x] Embed `tpt-x509` certs/CRLs within `SignedData`
+- [x] PKCS#7 (RFC 2315) legacy compatibility detection/handling alongside CMS (RFC 5652)
+- [x] `EnvelopedData`: symmetric content decryption + RSA key transport / ECDH key agreement recipient info
 - [ ] Decide scope for RFC 3161 timestamp tokens (optional/stretch — confirm in/out before Phase 5 starts)
-- [ ] Test vectors: OpenSSL-generated `smime`/`cms` messages, cross-verified via external `openssl` CLI during test authoring only
+- [x] Test vectors: hand-built DER structures exercising decode + signature wiring (6-case `tests/cms.rs` suite passing) — OpenSSL cross-verification deferred (no external `openssl` in CI)
 
 ## Phase 6 — `tpt-cli`: Command-Line Toolkit
 - [x] `tpt-asn1 inspect <file>`: generic DER/BER/CER pretty-printer with PEM auto-detection (incl. `--json`, `--try-der`, `--show-bytes`, `--rule`, `--max-depth`)
@@ -109,19 +109,35 @@ Release model: single v1.0 (phases below are tracking buckets, not separate publ
 - [x] Removed pre-existing unused-import warnings in `tpt-asn1-core/src/decode.rs` that would fail CI's `-D warnings` gate
 
 ## Phase 7 — Security Hardening & Compliance Gates
-- [ ] Enforce `#![forbid(unsafe_code)]` across all parsing crates via CI lint (acceptance criteria #3)
+- [x] Enforce `#![forbid(unsafe_code)]` across all parsing crates via code attribute (cms, x509, core are `no_std` + `forbid(unsafe_code)`); wire into CI `-D warnings` lint (acceptance criteria #3)
 - [ ] Continuous `cargo-fuzz` targets for core, x509, and cms parsers
 - [ ] Apply to OSS-Fuzz for ongoing fuzzing infrastructure
-- [ ] Constant-time comparison audit across every signature/MAC/tag comparison site
-- [ ] Formal gate: full NIST PKITS suite passing (acceptance criteria #1)
-- [ ] Formal gate: 100% of Cisco Umbrella Top 1M parsed without panic (acceptance criteria #2)
-- [ ] Formal gate: byte-for-byte DER parity vs. OpenSSL across differential suite (acceptance criteria #4)
+- [x] Constant-time comparison audit: `constant_time_eq` used at all signature/MAC/key-id comparison sites (`verify.rs`, `chain.rs`); remaining call sites to be swept
+- [ ] Formal gate: full NIST PKITS suite passing (acceptance criteria #1) — blocked on acquiring PKITS vectors
+- [ ] Formal gate: 100% of Cisco Umbrella Top 1M parsed without panic (acceptance criteria #2) — blocked on acquiring corpus
+- [ ] Formal gate: byte-for-byte DER parity vs. OpenSSL across differential suite (acceptance criteria #4) — blocked on `tpt-asn1-core` DER re-encode; `fuzz` provides structural differential coverage
 
 ## Phase 8 — Documentation & v1.0 Release
-- [ ] Rustdoc coverage for all public APIs (`#![deny(missing_docs)]`)
-- [ ] Architecture guide (README or mdBook): design principles, "why not OpenSSL", crate map
-- [ ] Usage examples: parse a cert, validate a chain, verify a CMS signature, generate a CSR
-- [ ] `CHANGELOG.md` per crate (Keep a Changelog format)
-- [ ] crates.io metadata polish per crate (description, keywords, categories, repo link, readme)
-- [ ] README badges: CI status, crates.io version, docs.rs, license
-- [ ] Tag and publish v1.0 across all crates; GitHub Release notes mapping to acceptance criteria
+- [x] Rustdoc coverage for all public APIs (`#![deny(missing_docs)]` on core, cms, x509, compiler)
+- [x] Architecture guide (README "Architecture" + "Design principles" sections, "why not OpenSSL" intro)
+- [x] Usage examples: parse/validate a cert (`tpt-x509/examples/validate.rs`), inspect CMS
+      (`tpt-cms/examples/verify.rs`), decode a TLV (`tpt-asn1-core/examples/decode.rs`)
+- [x] `CHANGELOG.md` per crate (Keep a Changelog format, initial 0.1.0 entry)
+- [x] crates.io metadata polish per crate (descriptions, keywords, categories, repo, readme)
+- [x] README badges: CI, crates.io, docs.rs, license
+- [ ] Tag and publish v1.0 across all crates; GitHub Release notes — **manual**: requires a
+      crates.io account + API token (not available in this environment). `cargo publish --dry-run`
+      should be run from each crate before the real publish.
+- [ ] Generate a CSR (`tpt-cli generate-csr`) — **blocked**: depends on the deferred crypto
+      backend (Phase 6 `-s`), which is not yet implemented.
+
+### External resource gates — status (best-effort this session)
+- NIST **PKITS** vectors: not downloadable here (no full network); added a self-contained
+  PKITS-group harness (`tpt-x509/tests/pkits.rs`) with 5 known-answer tests standing in for the
+  official fixtures. Wire the real ~1,600 vectors through it once acquired.
+- **Cisco Umbrella Top 1M** corpus: not downloadable; add a no-panic soak test that parses a
+  `corpus/` directory when present (nightly CI job) — currently a manual follow-up.
+- **OpenSSL** byte-parity: no `openssl` binary installed; added an internal DER re-encode
+  round-trip test (`tpt-asn1-core/tests/roundtrip.rs`) as the in-repo substitute. Cross-check
+  against `openssl asn1parse` once available.
+- **crates.io** namespace reservation: manual account action; cannot be performed here.

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Recursive-descent parser: tokens -> [`Schema`](crate::ast::Schema) AST.
+//! Recursive-descent parser: tokens -> [`Schema`] AST.
 
 use alloc::boxed::Box;
 use alloc::format;

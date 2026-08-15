@@ -3,7 +3,7 @@
 //! Well-known ASN.1 object identifiers used by X.509 / PKIX.
 //!
 //! OIDs are expressed as plain `&[u64]` arcs and matched against a parsed
-//! [`ObjectIdentifier`](tpt_asn1_core::types::ObjectIdentifier) via
+//! [`ObjectIdentifier`] via
 //! [`oid_eq`]. Keeping them as arc slices (rather than pre-encoded bytes) means
 //! the same constants drive both matching and any future re-encoding.
 
@@ -34,13 +34,15 @@ pub fn oid_eq_bytes(bytes: &[u8], expected: Oid) -> bool {
     buf[0] = 0x06;
     buf[1] = bytes.len() as u8;
     buf[2..2 + bytes.len()].copy_from_slice(bytes);
-    crate::core::decode::<crate::core::types::ObjectIdentifier>(&buf[..2 + bytes.len()])
+    crate::core::decode::<crate::core::types::ObjectIdentifier<'_>>(&buf[..2 + bytes.len()])
         .map(|o| o.matches(expected))
         .unwrap_or(false)
 }
 
 /// All known *public-key* algorithm OIDs (used to gate key handling).
 pub mod pk {
+    use super::Oid;
+
     /// `rsaEncryption` — 1.2.840.113549.1.1.1
     pub const RSA: Oid = &[1, 2, 840, 113549, 1, 1, 1];
     /// `id-RSASSA-PSS` — 1.2.840.113549.1.1.10
@@ -57,6 +59,8 @@ pub mod pk {
 
 /// Signature algorithm OIDs (`AlgorithmIdentifier.algorithm`).
 pub mod sig {
+    use super::Oid;
+
     /// `sha256WithRSAEncryption` — 1.2.840.113549.1.1.11
     pub const SHA256_RSA: Oid = &[1, 2, 840, 113549, 1, 1, 11];
     /// `sha384WithRSAEncryption` — 1.2.840.113549.1.1.12
@@ -79,6 +83,8 @@ pub mod sig {
 
 /// Hash algorithm OIDs (used by `DigestAlgorithm` and `SignedAttributes`).
 pub mod digest {
+    use super::Oid;
+
     /// `id-sha256` — 2.16.840.1.101.3.4.2.1
     pub const SHA256: Oid = &[2, 16, 840, 1, 101, 3, 4, 2, 1];
     /// `id-sha384` — 2.16.840.1.101.3.4.2.2
@@ -89,6 +95,8 @@ pub mod digest {
 
 /// Named curve OIDs (domain parameters for `ecPublicKey`).
 pub mod curve {
+    use super::Oid;
+
     /// `prime256v1` / P-256 — 1.2.840.10045.3.1.7
     pub const P256: Oid = &[1, 2, 840, 10045, 3, 1, 7];
     /// `secp384r1` / P-384 — 1.3.132.0.34
@@ -101,6 +109,8 @@ pub mod curve {
 
 /// PKIX *extension* OIDs (X.509 v3 certificate extensions).
 pub mod ext {
+    use super::Oid;
+
     /// `id-ce-basicConstraints` — 2.5.29.19
     pub const BASIC_CONSTRAINTS: Oid = &[2, 5, 29, 19];
     /// `id-ce-keyUsage` — 2.5.29.15
@@ -139,6 +149,8 @@ pub mod ext {
 
 /// X.520 `AttributeType` OIDs used inside `RelativeDistinguishedName`.
 pub mod attr {
+    use super::Oid;
+
     /// `id-at-commonName` (CN) — 2.5.4.3
     pub const COMMON_NAME: Oid = &[2, 5, 4, 3];
     /// `id-at-surname` (SN) — 2.5.4.4
@@ -165,6 +177,8 @@ pub mod attr {
 
 /// Extended Key Usage (`id-kp`) purpose OIDs.
 pub mod eku {
+    use super::Oid;
+
     /// `id-kp-serverAuth` — 1.3.6.1.5.5.7.3.1
     pub const SERVER_AUTH: Oid = &[1, 3, 6, 1, 5, 5, 7, 3, 1];
     /// `id-kp-clientAuth` — 1.3.6.1.5.5.7.3.2
@@ -181,6 +195,8 @@ pub mod eku {
 
 /// Other PKIX OIDs.
 pub mod pkix {
+    use super::Oid;
+
     /// `id-pkix-ocsp` (OCSP response type) — 1.3.6.1.5.5.7.48.1
     pub const OCSP: Oid = &[1, 3, 6, 1, 5, 5, 7, 48, 1];
     /// `id-ad-ocsp` (AIA access method) — 1.3.6.1.5.5.7.48.1

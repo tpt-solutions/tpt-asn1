@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Code generator: [`Schema`](crate::ast::Schema) AST -> Rust source targeting
+//! Code generator: [`Schema`] AST -> Rust source targeting
 //! the `tpt-asn1-core` `Decode`/`Encode` traits.
 
 use alloc::format;

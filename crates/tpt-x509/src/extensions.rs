@@ -46,7 +46,7 @@ impl<'a> Extension<'a> {
 }
 
 /// The set of extensions carried by a `TBSCertificate`.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Extensions<'a> {
     list: Vec<Extension<'a>>,
 }
@@ -58,19 +58,25 @@ impl<'a> Extensions<'a> {
     }
 
     /// Decode `Extensions` from the `SEQUENCE OF Extension` body (the content of
-    /// the `extensions` context-[3] field). Critically-unknown extensions fail
+    /// the `extensions` context-\[3\] field). Critically-unknown extensions fail
     /// closed.
     pub fn from_content(content: &'a [u8], config: crate::reader::Config) -> Result<Self> {
+        // `content` is the `SEQUENCE OF Extension` carried by the [3] EXPLICIT
+        // extensions field; unwrap the outer `SEQUENCE` to reach the individual
+        // extensions.
         let mut r = Reader::new(content, config);
-        let mut list = Vec::new();
-        while !r.is_empty() {
-            let ext = Extension::decode(&mut r)?;
-            if ext.critical && !is_known_extension(&ext.extn_id) {
-                return Err(Error::UnknownCriticalExtension);
+        read_sequence(&mut r, |inner| {
+            let mut list = Vec::new();
+            while !inner.is_empty() {
+                let ext = Extension::decode(inner)?;
+                if ext.critical && !is_known_extension(&ext.extn_id) {
+                    return Err(Error::UnknownCriticalExtension);
+                }
+                list.push(ext);
             }
-            list.push(ext);
-        }
-        Ok(Extensions { list })
+            Ok(list)
+        })
+        .map(|list| Extensions { list })
     }
 
     /// Number of extensions.
@@ -114,14 +120,14 @@ impl<'a> Extensions<'a> {
             .transpose()
     }
 
-    /// Decode the [`SubjectAltName`], if present.
+    /// Decode the [`subject_alt_name`](Self::subject_alt_name), if present.
     pub fn subject_alt_name(&self) -> Result<Option<GeneralNames<'a>>> {
         self.find(oid::ext::SUBJECT_ALT_NAME)
             .map(|e| e.decode_value())
             .transpose()
     }
 
-    /// Decode the [`IssuerAltName`], if present.
+    /// Decode the [`issuer_alt_name`](Self::issuer_alt_name), if present.
     pub fn issuer_alt_name(&self) -> Result<Option<GeneralNames<'a>>> {
         self.find(oid::ext::ISSUER_ALT_NAME)
             .map(|e| e.decode_value())
@@ -195,9 +201,9 @@ impl<'a> Decode<'a> for Extension<'a> {
                 if any.tag.is_universal(Tag::BOOLEAN) {
                     let b = any.decode_as::<Boolean>()?.0;
                     let value_any = Any::decode(inner)?;
-                    (b, value_any.decode_as::<OctetString>()?.0)
+                    (b, value_any.decode_as::<OctetString<'_>>()?.0)
                 } else {
-                    (false, any.decode_as::<OctetString>()?.0)
+                    (false, any.decode_as::<OctetString<'_>>()?.0)
                 }
             } else {
                 return Err(Error::TrailingData);
@@ -360,7 +366,7 @@ impl<'a> Decode<'a> for ExtendedKeyUsage<'a> {
 
 /// A `GeneralName` (RFC 5280 §4.2.1.6). Only the commonly exercised members are
 /// decoded into structured form; exotic members are retained as raw bytes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GeneralName<'a> {
     /// `[0] EXPLICIT otherName` (type OID + value).
     OtherName {
@@ -442,7 +448,7 @@ impl<'a> Decode<'a> for GeneralName<'a> {
 }
 
 /// `GeneralNames` — `SEQUENCE OF GeneralName`.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GeneralNames<'a> {
     /// The names.
     pub names: Vec<GeneralName<'a>>,
@@ -530,7 +536,7 @@ pub struct DistributionPoint<'a> {
 
 impl<'a> DistributionPoint<'a> {
     /// The distribution-point URIs (from `fullName`), if any.
-    pub fn uris(&self) -> impl Iterator<Item = &'a [u8]> {
+    pub fn uris(&self) -> impl Iterator<Item = &'a [u8]> + '_ {
         self.full_name
             .iter()
             .flat_map(|g| g.names.iter())
@@ -551,7 +557,7 @@ impl<'a> Decode<'a> for CrlDistributionPoints<'a> {
             let mut points = Vec::new();
             while !inner.is_empty() {
                 let dp_any = Any::decode(inner)?;
-                let mut sub = Reader::new(dp_any.value, *r.config());
+                let mut sub = Reader::new(dp_any.value, *inner.config());
                 let (full_name, crl_issuer) = read_sequence(&mut sub, |dp| {
                     let mut full_name = None;
                     let mut crl_issuer = None;
@@ -584,7 +590,7 @@ impl<'a> Decode<'a> for CrlDistributionPoints<'a> {
 // --- AuthorityInfoAccess --------------------------------------------------
 
 /// `AccessDescription` — `SEQUENCE { accessMethod OID, accessLocation GeneralName }`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AccessDescription<'a> {
     /// The access method OID (e.g. OCSP or CA Issuers).
     pub access_method: ObjectIdentifier<'a>,
@@ -601,7 +607,7 @@ pub struct AuthorityInfoAccess<'a> {
 
 impl<'a> AuthorityInfoAccess<'a> {
     /// URIs whose access method is `id-ad-ocsp`.
-    pub fn ocsp_uris(&self) -> impl Iterator<Item = &'a [u8]> {
+    pub fn ocsp_uris(&self) -> impl Iterator<Item = &'a [u8]> + '_ {
         self.descriptions
             .iter()
             .filter(|d| oid::oid_eq(&d.access_method, oid::pkix::AD_OCSP))
@@ -609,7 +615,7 @@ impl<'a> AuthorityInfoAccess<'a> {
     }
 
     /// URIs whose access method is `id-ad-caIssuers`.
-    pub fn ca_issuers_uris(&self) -> impl Iterator<Item = &'a [u8]> {
+    pub fn ca_issuers_uris(&self) -> impl Iterator<Item = &'a [u8]> + '_ {
         self.descriptions
             .iter()
             .filter(|d| oid::oid_eq(&d.access_method, oid::pkix::AD_CA_ISSUERS))
@@ -741,7 +747,7 @@ impl<'a> Decode<'a> for NameConstraints<'a> {
     }
 }
 
-fn decode_subtrees<'a>(content: &'a [u8], config: crate::reader::Config) -> Result<Vec<GeneralSubtree<'a>>> {
+fn decode_subtrees(content: &[u8], config: crate::reader::Config) -> Result<Vec<GeneralSubtree<'_>>> {
     let mut r = Reader::new(content, config);
     let mut out = Vec::new();
     while !r.is_empty() {

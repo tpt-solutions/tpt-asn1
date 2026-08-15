@@ -16,7 +16,7 @@ use crate::spki::SubjectPublicKeyInfo;
 use crate::time::{UnixTime, Validity};
 
 /// The encoded body of a `TBSCertificate`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TBSCertificate<'a> {
     /// The certificate version: 1 (default), 2, or 3.
     pub version: u8,
@@ -54,7 +54,7 @@ impl<'a> TBSCertificate<'a> {
 }
 
 /// An X.509v3 `Certificate`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Certificate<'a> {
     /// The to-be-signed certificate body.
     pub tbs: TBSCertificate<'a>,
@@ -121,7 +121,7 @@ impl<'a> Decode<'a> for Certificate<'a> {
     }
 }
 
-fn decode_tbs<'a>(content: &'a [u8], config: Config) -> Result<TBSCertificate<'a>> {
+fn decode_tbs(content: &[u8], config: Config) -> Result<TBSCertificate<'_>> {
     let mut r = Reader::new(content, config);
     let mut version = 1u8;
     if r.peek_tag() == Ok(Tag::context(true, 0)) {

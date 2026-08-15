@@ -8,7 +8,7 @@ use tpt_asn1_core::any::Any;
 use tpt_asn1_core::decode::Decode;
 use tpt_asn1_core::error::Result;
 use tpt_asn1_core::reader::Reader;
-use tpt_asn1_core::tag::Tag;
+use tpt_asn1_core::tag::{Class, Tag};
 use tpt_asn1_core::types::ObjectIdentifier;
 
 use crate::oid;
@@ -51,7 +51,7 @@ impl<'a> AttributeValue<'a> {
         let t = any.tag;
         let b = any.value;
         let mk = |n: u32| AttributeValue::Other { tag_number: n, bytes: b };
-        if t.class != Tag::Universal {
+        if t.class != Class::Universal {
             return Ok(mk(t.number));
         }
         Ok(match t.number {
@@ -83,7 +83,7 @@ impl<'a> AttributeValue<'a> {
     }
 
     /// Best-effort UTF-8 view. Returns `None` for wide-character or invalid
-    /// encodings; those callers should fall back to [`as_bytes`].
+    /// encodings; those callers should fall back to [`AttributeValue::as_bytes`].
     pub fn as_str(&self) -> Option<&'a str> {
         core::str::from_utf8(self.as_bytes()).ok()
     }
@@ -118,7 +118,7 @@ impl<'a> Decode<'a> for AttributeTypeAndValue<'a> {
 
 /// A `RelativeDistinguishedName` — a `SET OF AttributeTypeAndValue` (usually
 /// a single AVA, but multiple are legal).
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RelativeDistinguishedName<'a> {
     /// The attribute/value assertions in this RDN.
     pub attributes: Vec<AttributeTypeAndValue<'a>>,
@@ -139,7 +139,7 @@ impl<'a> RelativeDistinguishedName<'a> {
 /// The full DER of the `Name` is retained so that chain-building can perform
 /// exact issuer/subject matching; [`Name::matches`] additionally offers the
 /// RFC 5280 §7.1 normalized comparison.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Name<'a> {
     rdns: Vec<RelativeDistinguishedName<'a>>,
     der: &'a [u8],

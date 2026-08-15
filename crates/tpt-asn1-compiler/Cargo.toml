@@ -9,7 +9,7 @@ repository.workspace = true
 homepage.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Optional .tpt-asn1 DSL to Rust code generator (scaffold)"
+description = ".tpt-asn1 DSL to Rust code generator: hand-written lexer/parser and Decode/Encode emitter (no_std + alloc)"
 readme = "../README.md"
 
 [dependencies]

@@ -71,7 +71,7 @@ impl<'a> Time<'a> {
     ///
     /// Fractional seconds are truncated; timezone offsets are applied so the
     /// result is always UTC. Leap seconds are not represented.
-    pub fn to_unix(&self) -> Result<UnixTime> {
+    pub fn to_unix(self) -> Result<UnixTime> {
         let dt = self.parse()?;
         to_unix_seconds(&dt).map(UnixTime)
     }
@@ -126,7 +126,10 @@ impl<'a> Decode<'a> for Validity<'a> {
 /// Howard Hinnant's `days_from_civil` civil-date algorithm, which is exact for
 /// any valid Gregorian date.
 fn to_unix_seconds(dt: &DateTime) -> Result<i64> {
-    let y = dt.year as i64;
+    // Howard Hinnant's `days_from_civil`: the months January and February are
+    // counted as the final months (11 and 12) of the *previous* year, so the
+    // year is decremented when `month <= 2`.
+    let y = dt.year as i64 - if dt.month <= 2 { 1 } else { 0 };
     let m = dt.month as i64;
     let d = dt.day as i64;
     let era = if y >= 0 { y } else { y - 399 } / 400;

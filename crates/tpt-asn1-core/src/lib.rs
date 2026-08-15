@@ -39,7 +39,7 @@
 
 #![no_std]
 #![forbid(unsafe_code)]
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 #![warn(rust_2018_idioms)]
 
 #[cfg(feature = "alloc")]

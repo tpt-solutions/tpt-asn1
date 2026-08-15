@@ -73,6 +73,7 @@ fn explicit0(content: &[u8]) -> Vec<u8> {
 
 const ID_DATA: &[u8] = &[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x07, 0x01];
 const ID_SIGNED_DATA: &[u8] = &[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x07, 0x02];
+const ID_ENVELOPED_DATA: &[u8] = &[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x07, 0x03];
 const SHA256: &[u8] = &[0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01];
 const RSA_ENC: &[u8] = &[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01];
 const SHA256_RSA: &[u8] = &[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x0b];
@@ -186,6 +187,10 @@ fn content_info(inner: &[u8]) -> Vec<u8> {
     seq!(oid(ID_SIGNED_DATA), explicit0(inner))
 }
 
+fn content_info_of(content_type: &[u8], inner: &[u8]) -> Vec<u8> {
+    seq!(oid(content_type), explicit0(inner))
+}
+
 // --- Tests ------------------------------------------------------------------
 
 #[test]
@@ -260,7 +265,7 @@ fn decode_enveloped_data_key_transport() {
     let recipient_infos = set!(ktri);
     let eci = seq!(oid(ID_DATA), seq!(oid(SHA256)), tlv(0x80, b"cipher"));
     let ed = seq!(version, recipient_infos, eci);
-    let ci_buf = content_info(&ed);
+    let ci_buf = content_info_of(ID_ENVELOPED_DATA, &ed);
 
     let ci = ContentInfo::decode(&mut Reader::new(&ci_buf, Config::der())).expect("ContentInfo decodes");
     let ed: EnvelopedData<'_> = ci.decode_content().expect("EnvelopedData decodes");

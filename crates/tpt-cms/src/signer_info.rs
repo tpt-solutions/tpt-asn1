@@ -61,7 +61,7 @@ impl<'a> SignedAttributes<'a> {
     /// are present.
     pub fn der(&self) -> alloc::vec::Vec<u8> {
         let mut out = alloc::vec::Vec::with_capacity(self.raw.len() + 8);
-        out.push(Tag::SET as u8); // 0x31
+        out.push(Tag::universal_constructed(Tag::SET).to_byte()); // 0x31
         let len = self.raw.len();
         if len < 0x80 {
             out.push(len as u8);

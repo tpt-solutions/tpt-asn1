@@ -6,12 +6,13 @@
 //! `EnvelopedData`, `DigestedData`, `EncryptedData`) on top of
 //! `tpt-asn1-core`, plus PKCS#7 v1.5 (RFC 2315) legacy compatibility. All
 //! cryptographic math is delegated to a pluggable backend (the same
-//! [`SignatureVerifier`](tpt_x509::crypto::SignatureVerifier) trait defined in
+//! [`SignatureVerifier`](tpt_x509::verify::SignatureVerifier) trait defined in
 //! `tpt-x509`), keeping this crate free of C dependencies and `unsafe` code.
 //!
 //! ## Quick start
 //!
 //! ```
+//! use tpt_asn1_core::decode::Decode;
 //! use tpt_asn1_core::reader::Config;
 //! // Parse a top-level CMS message:
 //! let ci = tpt_cms::content_info::ContentInfo::decode(&mut tpt_asn1_core::reader::Reader::new(
@@ -21,7 +22,7 @@
 
 #![no_std]
 #![forbid(unsafe_code)]
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 
 #[cfg(feature = "alloc")]
 extern crate alloc;

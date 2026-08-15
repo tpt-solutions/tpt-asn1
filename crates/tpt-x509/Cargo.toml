@@ -9,7 +9,7 @@ repository.workspace = true
 homepage.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "X.509v3 certificate parsing, validation, and chain building (scaffold)"
+description = "X.509v3 certificate parsing, validation, and RFC 5280 6.1 chain building (no_std, fail-closed)"
 readme = "../README.md"
 
 [dependencies]

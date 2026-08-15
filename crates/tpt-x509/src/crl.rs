@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use tpt_asn1_core::any::Any;
 use tpt_asn1_core::decode::{read_sequence, Decode};
 use tpt_asn1_core::error::Result;
-use tpt_asn1_core::reader::{Config, Reader};
+use tpt_asn1_core::reader::{Reader};
 use tpt_asn1_core::tag::Tag;
 use tpt_asn1_core::types::{BitString, Integer};
 
@@ -85,7 +85,7 @@ impl<'a> Decode<'a> for CertificateList<'a> {
             if r2.peek_tag() == Ok(Tag::universal(Tag::INTEGER)) {
                 let _version = Integer::decode(&mut r2)?;
             }
-            let signature_algorithm = AlgorithmIdentifier::decode(&mut r2)?;
+            let _tbs_signature_algorithm = AlgorithmIdentifier::decode(&mut r2)?;
             let issuer = Name::decode(&mut r2)?;
             let this_update = Time::decode(&mut r2)?;
             let next_update = if !r2.is_empty()
