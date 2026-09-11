@@ -2,12 +2,16 @@
 //! in a corpus directory and assert that `Certificate` decoding never panics.
 //!
 //! A malformed/rejected certificate is an expected `Err(..)` and does not fail
-//! this test — only a panic (caught via `catch_unwind`) or a hang does. The
-//! corpus itself is not vendored into the repo (real-world leaf certs harvested
-//! from live hosts, not fixed test data); point `TPT_CORPUS_DIR` at a directory
-//! of `.der`/`.crt`/`.pem`-as-DER files to run it. Without that env var, or with
-//! an empty/missing directory, the test is a no-op so `cargo test` stays green
-//! without the corpus present.
+//! this test — only a panic (caught via `catch_unwind`) or a hang does.
+//!
+//! By default this runs against `tests/umbrella_corpus/`: 1,200 real leaf
+//! certificates (DER), randomly subsampled from a harvest of ~7,400 successful
+//! TLS handshakes against the top 10,000 domains of the Cisco Umbrella Top 1M
+//! list (see `scripts/harvest_umbrella_corpus.sh` and
+//! `tests/umbrella_corpus/README.md` for provenance and how to regenerate or
+//! extend it — e.g. to soak the full 1M list locally). Set `TPT_CORPUS_DIR` to
+//! point at a different directory of `.der` files instead (an empty/missing
+//! directory makes the test a no-op so `cargo test` stays green).
 
 use std::fs;
 use std::panic;
@@ -20,10 +24,7 @@ use tpt_asn1_x509::Certificate;
 fn corpus_soak_no_panic() {
     let dir = match std::env::var("TPT_CORPUS_DIR") {
         Ok(d) => PathBuf::from(d),
-        Err(_) => {
-            eprintln!("TPT_CORPUS_DIR not set; skipping corpus soak test");
-            return;
-        }
+        Err(_) => PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/umbrella_corpus"),
     };
 
     let entries = match fs::read_dir(&dir) {
@@ -45,7 +46,7 @@ fn corpus_soak_no_panic() {
 
     for entry in entries.flatten() {
         let path = entry.path();
-        if !path.is_file() {
+        if !path.is_file() || path.extension().and_then(|e| e.to_str()) != Some("der") {
             continue;
         }
         let bytes = match fs::read(&path) {

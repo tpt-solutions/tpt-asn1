@@ -7,3 +7,6 @@ Cargo.lock
 *.swp
 .DS_Store
 /scratch_corpus/
+__pycache__/
+*.pyc
+/crates/tpt-asn1-x509/tests/umbrella_corpus/

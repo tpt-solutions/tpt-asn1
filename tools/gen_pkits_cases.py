@@ -21,14 +21,35 @@ def split_cases(text):
     lines = text.splitlines()
     cases = []
     current = None
+    cutting = False
     for ln in lines:
-        m = CASE_HEADER.match(ln.strip())
+        stripped = ln.strip()
+        m = CASE_HEADER.match(stripped)
         if m and m.group(1).startswith("4."):
             if current:
                 cases.append(current)
             current = (m.group(1), m.group(2).strip(), [ln])
-        elif current is not None:
-            current[2].append(ln)
+            cutting = False
+        elif current is not None and not cutting:
+            # Stop at later section boundaries that are not 4.x test headers
+            # (e.g. "5 Relationship to Previous Test Suite", "Appendix A").
+            stripped = ln.strip()
+            first = stripped.split()
+            if "=====" in stripped:
+                current[2].append(ln)
+            elif not first:
+                current[2].append(ln)
+            elif re.match(r"^\d\.\d+\.", stripped):
+                current[2].append(ln)
+            elif re.match(r"^\d\.\d", stripped):
+                # Group heading (e.g. "4.2 Validity Periods"): end current case.
+                cutting = True
+            elif re.match(r"^\d+\s+[A-Z]", stripped):
+                cutting = True  # e.g. "5 Relationship to Previous Test Suite"
+            elif stripped.lower().startswith("appendix"):
+                cutting = True
+            else:
+                current[2].append(ln)
     if current:
         cases.append(current)
     return cases
@@ -52,30 +73,35 @@ def section(body, name):
 def extract_paths(body):
     """Parse the bulleted Certification Path list into a list of items.
 
-    The PDF text dump may reorder the "Procedure:/Expected Result:/Certification
-    Path:" blocks, so we simply collect every '•' bullet line anywhere in the case
-    body. Continuation lines that directly follow a bullet line are appended."""
-    items = []
-    active = False
+    The PDF text dump may reorder "Procedure:/Expected Result:/Certification
+    Path:" blocks, so we collect every '•' block anywhere in the case body.
+    A bullet block is a bullet line plus following wrapped lines until the next
+    bullet or a blank/page-furniture line. Items within a block are comma
+    separated; item names may be wrapped across lines.
+    """
+    blocks = []
+    cur = None
     for ln in body:
         stripped = ln.strip()
+        if not stripped or "=====" in stripped or re.match(r"^\d+$", stripped):
+            if cur:
+                blocks.append(cur)
+            cur = None
+            continue
         if stripped.startswith("\u2022"):
-            active = True
-            for part in stripped.lstrip("\u2022").split(","):
-                part = part.strip()
-                if part:
-                    items.append(part)
-        elif active and stripped:
-            # continuation of the previous bullet, unless it is page furniture
-            if "=====" in stripped or re.match(r"^\d+$", stripped):
-                continue
-            if re.match(r"^\d\.\d", stripped) or stripped.isupper():
-                active = False
-                continue
-            items[-1] += " " + stripped
-        else:
-            # blank line ends a bullet block; later blocks may follow.
-            active = False
+            if cur:
+                blocks.append(cur)
+            cur = stripped.lstrip("\u2022").strip()
+        elif cur is not None:
+            cur += " " + stripped
+    if cur:
+        blocks.append(cur)
+    items = []
+    for block in blocks:
+        for part in block.split(","):
+            part = part.strip()
+            if part:
+                items.append(part)
     return items
 
 
@@ -88,13 +114,26 @@ def extract_ee_from_prose(body):
     return m.group(1).strip()
 
 
-def resolve_item(item):
-    """Return (dir, filename) based on the fixture layout, or None."""
-    stem = item.replace(" ", "")
-    # deltaCRL/CRL suffixes resolve to the crls directory first.
-    if stem.endswith("CRL") or "deltaCRL" in stem:
-        return ("crls", stem + ".crl")
-    return ("certs", stem + ".crt")
+def _normalize(item):
+    return item.replace(" ", "").replace("-", "")
+
+
+def resolve_item(item, known):
+    """Return (dir, filename) based on fixture existence, or None.
+
+    NIST fixture names drop spaces and hyphens from the phrase used in the PDF."""
+    stem = _normalize(item)
+    if not stem:
+        return None
+    if not known:
+        # Fallback heuristics when fixture dirs are unavailable.
+        if stem.endswith("CRL") or "deltaCRL" in stem:
+            return ("crls", stem + ".crl")
+        return ("certs", stem + ".crt")
+    for dirn in ("certs", "crls"):
+        if stem in known.get(dirn, set()):
+            return (dirn, stem + (".crl" if dirn == "crls" else ".crt"))
+    return None
 
 
 def parse_policy_set(text):
@@ -215,7 +254,7 @@ def main():
         items = extract_paths(body)
         resolved = []
         for it in items:
-            r = resolve_item(it)
+            r = resolve_item(it, known)
             if r is None:
                 unresolved.append((cid, it))
                 continue
@@ -224,7 +263,7 @@ def main():
             resolved.append((dirn, stem))
             if known and stem not in known.get(dirn, set()):
                 unresolved.append((cid, f"MISSING:{dirn}/{stem}"))
-        # The end entity is the last cert listed in the path.
+        # The end entity is the last certificate listed in the certification path.
         cers = [s for d, s in resolved if d == "certs"]
         ee = cers[-1] if cers else None
         if ee is None:
@@ -233,6 +272,8 @@ def main():
                 ee = prose_ee
             else:
                 unresolved.append((cid, "NO_EE_PARSED"))
+        elif known and "certs" in known and ee not in known["certs"]:
+            unresolved.append((cid, f"EE_MISSING:certs/{ee}"))
         paths = [f"{d}/{s}" for d, s in resolved]
         subs = build_subcases(cid, body, ee, paths)
         rows.extend(subs)
@@ -250,3 +291,7 @@ def main():
         print(f"# {cid}: {item}", file=report)
 
     sys.stdout.write("\n".join(out) + "\n")
+
+
+if __name__ == "__main__":
+    main()
