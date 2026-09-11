@@ -13,10 +13,10 @@ use tpt_asn1_core::any::Any;
 use tpt_asn1_core::decode;
 use tpt_asn1_core::decode::Decode;
 use tpt_asn1_core::reader::{Config, Reader};
-use tpt_x509::certificate::Certificate;
-use tpt_x509::extensions::Extensions;
-use tpt_x509::name::Name;
-use tpt_x509::spki::SubjectPublicKeyInfo;
+use tpt_asn1_x509::certificate::Certificate;
+use tpt_asn1_x509::extensions::Extensions;
+use tpt_asn1_x509::name::Name;
+use tpt_asn1_x509::spki::SubjectPublicKeyInfo;
 
 fuzz_target!(|data: &[u8]| {
     for config in [Config::der(), Config::ber()] {

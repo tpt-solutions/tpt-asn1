@@ -9,7 +9,7 @@ tag-length-value (TLV) codec in pure Rust, with no C dependencies and a
 fail-closed security posture.
 
 This is the foundational crate of the `tpt-asn1` family. Higher-level crates
-(`tpt-x509`, `tpt-cms`, `tpt-asn1-compiler`) build directly on the `Decode` /
+(`tpt-asn1-x509`, `tpt-asn1-cms`, `tpt-asn1-compiler`) build directly on the `Decode` /
 `Encode` traits and the `Reader` / `Writer` primitives defined here.
 
 ## Why

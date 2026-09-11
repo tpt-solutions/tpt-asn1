@@ -28,8 +28,8 @@ members = ["."]
 [dependencies]
 libfuzzer-sys = "0.4"
 tpt-asn1-core = { path = "../crates/tpt-asn1-core" }
-tpt-x509 = { path = "../crates/tpt-x509" }
-tpt-cms = { path = "../crates/tpt-cms" }
+tpt-asn1-x509 = { path = "../crates/tpt-asn1-x509" }
+tpt-asn1-cms = { path = "../crates/tpt-asn1-cms" }
 
 [[bin]]
 name = "core_tlv"

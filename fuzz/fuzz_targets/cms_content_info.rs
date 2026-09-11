@@ -2,7 +2,7 @@
 
 //! Fuzz target: CMS `ContentInfo` outer wrapper (RFC 5652 / PKCS#7).
 //!
-//! Exercises the top-level `ContentInfo` decode entry points used by `tpt-cms`,
+//! Exercises the top-level `ContentInfo` decode entry points used by `tpt-asn1-cms`,
 //! plus the OID recognition and content-typing helpers.
 
 #![no_main]
@@ -14,9 +14,9 @@ use tpt_asn1_core::reader::{Config, Reader};
 fuzz_target!(|data: &[u8]| {
     for config in [Config::der(), Config::ber()] {
         let mut r = Reader::new(data, config);
-        let _ = tpt_cms::content_info::ContentInfo::decode(&mut r);
+        let _ = tpt_asn1_cms::content_info::ContentInfo::decode(&mut r);
     }
 
-    let _ = tpt_cms::content_info::decode(data);
-    let _ = tpt_cms::content_info::decode_partial(data);
+    let _ = tpt_asn1_cms::content_info::decode(data);
+    let _ = tpt_asn1_cms::content_info::decode_partial(data);
 });

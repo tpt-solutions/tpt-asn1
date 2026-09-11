@@ -6,3 +6,4 @@ Cargo.lock
 .idea/
 *.swp
 .DS_Store
+/scratch_corpus/

@@ -26,9 +26,9 @@ Raw DER/BER Bytes -> tpt-asn1-core -> Typed X.509/CMS Structs
 
 ### Components
 - `tpt-asn1-core`: Low-level DER/BER/CER tag-length-value (TLV) codec.
-- `tpt-x509`: X.509v3 certificate validation, chain building, and path resolution.
-- `tpt-cms`: Cryptographic Message Syntax (PKCS#7) for signed/encrypted payloads.
-- `tpt-cli`: A modern, safe replacement for `openssl x509` and `openssl req`.
+- `tpt-asn1-x509`: X.509v3 certificate validation, chain building, and path resolution.
+- `tpt-asn1-cms`: Cryptographic Message Syntax (PKCS#7) for signed/encrypted payloads.
+- `tpt-asn1-cli`: A modern, safe replacement for `openssl x509` and `openssl req`.
 
 ## 4. Core Engine & Wire Format
 ASN.1 DER is inherently a TLV (Tag-Length-Value) format. 

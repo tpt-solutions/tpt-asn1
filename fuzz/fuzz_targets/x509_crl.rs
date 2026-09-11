@@ -10,8 +10,8 @@
 use libfuzzer_sys::fuzz_target;
 use tpt_asn1_core::decode::Decode;
 use tpt_asn1_core::reader::{Config, Reader};
-use tpt_x509::crl::CertificateList;
-use tpt_x509::time::UnixTime;
+use tpt_asn1_x509::crl::CertificateList;
+use tpt_asn1_x509::time::UnixTime;
 
 fuzz_target!(|data: &[u8]| {
     for config in [Config::der(), Config::ber()] {

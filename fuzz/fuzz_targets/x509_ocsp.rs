@@ -12,11 +12,11 @@ use libfuzzer_sys::fuzz_target;
 use tpt_asn1_core::decode;
 use tpt_asn1_core::decode::Decode;
 use tpt_asn1_core::reader::{Config, Reader};
-use tpt_x509::ocsp::{
+use tpt_asn1_x509::ocsp::{
     BasicOcspResponse, CertId, OcspRequest, OcspResponse, Request, ResponseBytes, SingleResponse,
     TbsRequest,
 };
-use tpt_x509::oid;
+use tpt_asn1_x509::oid;
 
 fuzz_target!(|data: &[u8]| {
     let configs = [Config::der(), Config::ber()];

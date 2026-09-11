@@ -1,8 +1,8 @@
 # tpt-asn1
 
 [![CI](https://github.com/tpt-solutions/tpt-asn1/actions/workflows/ci.yml/badge.svg)](https://github.com/tpt-solutions/tpt-asn1/actions)
-[![crates.io](https://img.shields.io/crates/v/tpt-x509.svg)](https://crates.io/crates/tpt-x509)
-[![docs.rs](https://docs.rs/tpt-x509/badge.svg)](https://docs.rs/tpt-x509)
+[![crates.io](https://img.shields.io/crates/v/tpt-asn1-x509.svg)](https://crates.io/crates/tpt-asn1-x509)
+[![docs.rs](https://docs.rs/tpt-asn1-x509/badge.svg)](https://docs.rs/tpt-asn1-x509)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-MIT)
 
 A memory-safe, **zero-copy** ASN.1 **DER/BER/CER** codec and X.509 / PKCS#7 (CMS)
@@ -19,13 +19,13 @@ Rust API that rejects malformed certificates at the boundary.
 
 ## Crates
 
-| Crate                 | Description                                                        |
-| --------------------- | ------------------------------------------------------------------ |
-| `tpt-asn1-core`       | Low-level DER/BER/CER tag-length-value (TLV) codec (`no_std`).     |
-| `tpt-asn1-compiler`   | Optional `.tpt-asn1` DSL → Rust code generator.                    |
-| `tpt-x509`            | X.509v3 certificate parsing, validation, and chain building.       |
-| `tpt-cms`             | Cryptographic Message Syntax (PKCS#7) signed/encrypted messages.   |
-| `tpt-cli`             | Command-line toolkit (`inspect`, `validate`, …).                   |
+| Crate               | Description                                                      |
+| ------------------- | ----------------------------------------------------------------- |
+| `tpt-asn1-core`     | Low-level DER/BER/CER tag-length-value (TLV) codec (`no_std`).    |
+| `tpt-asn1-compiler` | Optional `.tpt-asn1` DSL → Rust code generator.                   |
+| `tpt-asn1-x509`     | X.509v3 certificate parsing, validation, and chain building.      |
+| `tpt-asn1-cms`      | Cryptographic Message Syntax (PKCS#7) signed/encrypted messages.  |
+| `tpt-asn1-cli`      | Command-line toolkit (`inspect`, `validate`, …).                  |
 
 ## Architecture
 
@@ -62,8 +62,8 @@ See `spec.txt` for the full design document and `todo.md` for the phased roadmap
 
 ## Usage
 
-- Parse and validate an X.509 chain — see [`crates/tpt-x509/examples/validate.rs`](crates/tpt-x509/examples/validate.rs).
-- Verify a CMS `SignedData` — see [`crates/tpt-cms/examples/verify.rs`](crates/tpt-cms/examples/verify.rs).
+- Parse and validate an X.509 chain — see [`crates/tpt-asn1-x509/examples/validate.rs`](crates/tpt-asn1-x509/examples/validate.rs).
+- Verify a CMS `SignedData` — see [`crates/tpt-asn1-cms/examples/verify.rs`](crates/tpt-asn1-cms/examples/verify.rs).
 - Decode a raw ASN.1 TLV — see [`crates/tpt-asn1-core/examples/decode.rs`](crates/tpt-asn1-core/examples/decode.rs).
 
 ## License

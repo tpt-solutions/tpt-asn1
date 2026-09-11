@@ -12,11 +12,11 @@
 use libfuzzer_sys::fuzz_target;
 use tpt_asn1_core::decode::Decode;
 use tpt_asn1_core::reader::{Config, Reader};
-use tpt_cms::content_info::ContentInfo;
-use tpt_cms::enveloped_data::{DigestedData, EncryptedData, EnvelopedData};
-use tpt_cms::recipient_info::RecipientInfo;
-use tpt_cms::signed_data::SignedData;
-use tpt_cms::signer_info::SignerInfo;
+use tpt_asn1_cms::content_info::ContentInfo;
+use tpt_asn1_cms::enveloped_data::{DigestedData, EncryptedData, EnvelopedData};
+use tpt_asn1_cms::recipient_info::RecipientInfo;
+use tpt_asn1_cms::signed_data::SignedData;
+use tpt_asn1_cms::signer_info::SignerInfo;
 
 fuzz_target!(|data: &[u8]| {
     for config in [Config::der(), Config::ber()] {
@@ -40,7 +40,7 @@ fuzz_target!(|data: &[u8]| {
     }
 
     // Whole-buffer strict-DER entry points.
-    let _ = tpt_cms::content_info::decode(data);
+    let _ = tpt_asn1_cms::content_info::decode(data);
 
     // If the input decodes as a valid ContentInfo, decode its inner content too.
     if let Ok(ci) = ContentInfo::decode(&mut Reader::new(data, Config::der())) {
