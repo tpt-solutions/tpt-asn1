@@ -196,8 +196,8 @@ fn content_info_of(content_type: &[u8], inner: &[u8]) -> Vec<u8> {
 #[test]
 fn decode_signed_data_no_signed_attrs() {
     let buf = content_info(&signed_data_no_signed_attrs());
-    let ci = ContentInfo::decode(&mut Reader::new(&buf, Config::der()))
-        .expect("ContentInfo decodes");
+    let ci =
+        ContentInfo::decode(&mut Reader::new(&buf, Config::der())).expect("ContentInfo decodes");
     assert_eq!(ci.content_type.0, ID_SIGNED_DATA);
     let sd: SignedData<'_> = ci.decode_content().expect("SignedData decodes");
     assert!(sd.is_pkcs7_legacy()); // version 1 with IssuerAndSerialNumber is legacy-shaped
@@ -209,8 +209,8 @@ fn decode_signed_data_no_signed_attrs() {
 #[test]
 fn verify_signed_data_no_signed_attrs() {
     let buf = content_info(&signed_data_no_signed_attrs());
-    let ci = ContentInfo::decode(&mut Reader::new(&buf, Config::der()))
-        .expect("ContentInfo decodes");
+    let ci =
+        ContentInfo::decode(&mut Reader::new(&buf, Config::der())).expect("ContentInfo decodes");
     let sd: SignedData<'_> = ci.decode_content().expect("SignedData decodes");
     let results = verify(&sd, &MockVerifier, None, &[]).expect("verify runs");
     assert_eq!(results, vec![VerificationResult::Success]);
@@ -219,8 +219,8 @@ fn verify_signed_data_no_signed_attrs() {
 #[test]
 fn verify_signed_data_bad_signature() {
     let buf = content_info(&signed_data_no_signed_attrs());
-    let ci = ContentInfo::decode(&mut Reader::new(&buf, Config::der()))
-        .expect("ContentInfo decodes");
+    let ci =
+        ContentInfo::decode(&mut Reader::new(&buf, Config::der())).expect("ContentInfo decodes");
     let sd: SignedData<'_> = ci.decode_content().expect("SignedData decodes");
     // Tamper: a signature that no longer equals the content must fail.
     let mut sd2 = sd;
@@ -232,8 +232,8 @@ fn verify_signed_data_bad_signature() {
 #[test]
 fn verify_signed_data_with_signed_attrs() {
     let buf = content_info(&signed_data_with_signed_attrs());
-    let ci = ContentInfo::decode(&mut Reader::new(&buf, Config::der()))
-        .expect("ContentInfo decodes");
+    let ci =
+        ContentInfo::decode(&mut Reader::new(&buf, Config::der())).expect("ContentInfo decodes");
     let sd: SignedData<'_> = ci.decode_content().expect("SignedData decodes");
     assert!(sd.signer_infos[0].signed_attrs.is_some());
     let results = verify(&sd, &MockVerifier, None, &[]).expect("verify runs");
@@ -244,8 +244,8 @@ fn verify_signed_data_with_signed_attrs() {
 fn verify_detached_missing_content() {
     // Build a SignedData with no eContent, then verify without external content.
     let buf = content_info(&signed_data_no_signed_attrs());
-    let ci = ContentInfo::decode(&mut Reader::new(&buf, Config::der()))
-        .expect("ContentInfo decodes");
+    let ci =
+        ContentInfo::decode(&mut Reader::new(&buf, Config::der())).expect("ContentInfo decodes");
     let mut sd: SignedData<'_> = ci.decode_content().expect("SignedData decodes");
     sd.e_content = None;
     let err = verify(&sd, &MockVerifier, None, &[]);
@@ -256,18 +256,14 @@ fn verify_detached_missing_content() {
 fn decode_enveloped_data_key_transport() {
     // EnvelopedData with a single KeyTransRecipientInfo.
     let version = integer(&[0x00]);
-    let ktri = seq!(
-        integer(&[0x00]),
-        signer_id(),
-        seq!(oid(RSA_ENC)),
-        octet(&[0x11, 0x22, 0x33]),
-    );
+    let ktri = seq!(integer(&[0x00]), signer_id(), seq!(oid(RSA_ENC)), octet(&[0x11, 0x22, 0x33]),);
     let recipient_infos = set!(ktri);
     let eci = seq!(oid(ID_DATA), seq!(oid(SHA256)), tlv(0x80, b"cipher"));
     let ed = seq!(version, recipient_infos, eci);
     let ci_buf = content_info_of(ID_ENVELOPED_DATA, &ed);
 
-    let ci = ContentInfo::decode(&mut Reader::new(&ci_buf, Config::der())).expect("ContentInfo decodes");
+    let ci =
+        ContentInfo::decode(&mut Reader::new(&ci_buf, Config::der())).expect("ContentInfo decodes");
     let ed: EnvelopedData<'_> = ci.decode_content().expect("EnvelopedData decodes");
     assert_eq!(ed.version, 0);
     assert_eq!(ed.recipient_infos.len(), 1);

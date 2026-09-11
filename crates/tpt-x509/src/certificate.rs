@@ -44,12 +44,7 @@ impl<'a> TBSCertificate<'a> {
 
     /// Whether the certificate is a CA (per `BasicConstraints`).
     pub fn is_ca(&self) -> bool {
-        self.extensions
-            .basic_constraints()
-            .ok()
-            .flatten()
-            .map(|bc| bc.ca)
-            .unwrap_or(false)
+        self.extensions.basic_constraints().ok().flatten().map(|bc| bc.ca).unwrap_or(false)
     }
 }
 
@@ -111,12 +106,7 @@ impl<'a> Decode<'a> for Certificate<'a> {
             let tbs = decode_tbs(tbs_any.value, *inner.config())?;
             let signature_algorithm = AlgorithmIdentifier::decode(inner)?;
             let signature_value = BitString::decode(inner)?;
-            Ok(Certificate {
-                tbs,
-                signature_algorithm,
-                signature_value,
-                tbs_der: tbs_any.full,
-            })
+            Ok(Certificate { tbs, signature_algorithm, signature_value, tbs_der: tbs_any.full })
         })
     }
 }
@@ -140,9 +130,7 @@ fn decode_tbs(content: &[u8], config: Config) -> Result<TBSCertificate<'_>> {
     let subject_public_key_info = SubjectPublicKeyInfo::decode(&mut r)?;
 
     // Skip optional issuerUniqueID [1] / subjectUniqueID [2] (rare, v2/v1).
-    while r.peek_tag() == Ok(Tag::context(false, 1))
-        || r.peek_tag() == Ok(Tag::context(false, 2))
-    {
+    while r.peek_tag() == Ok(Tag::context(false, 1)) || r.peek_tag() == Ok(Tag::context(false, 2)) {
         Any::decode(&mut r)?;
     }
 

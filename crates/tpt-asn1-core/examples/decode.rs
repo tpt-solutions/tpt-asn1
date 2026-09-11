@@ -1,4 +1,4 @@
-﻿//! Minimal example: decode a single ASN.1 TLV.
+//! Minimal example: decode a single ASN.1 TLV.
 //!
 //! Run with: `cargo run -p tpt-asn1-core --example decode`
 

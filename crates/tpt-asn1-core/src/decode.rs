@@ -3,9 +3,9 @@
 //! The [`Decode`] / [`Encode`] traits and structured-value helpers.
 
 use crate::error::{Error, Result};
-use crate::reader::Reader;
 #[cfg(feature = "alloc")]
 use crate::reader::EncodingRule;
+use crate::reader::Reader;
 use crate::tag::Tag;
 use crate::writer::{WriteBackend, Writer};
 

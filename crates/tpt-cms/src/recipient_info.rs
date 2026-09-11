@@ -176,7 +176,12 @@ fn decode_key_agree<'a>(value: &'a [u8]) -> Result<KeyAgreeRecipientInfo<'a>> {
         let encrypted_key = OctetString::decode(&mut kr)?.0;
         recipient_encrypted_keys.push(RecipientEncryptedKey { rid, encrypted_key });
     }
-    Ok(KeyAgreeRecipientInfo { version, originator, key_encryption_algorithm, recipient_encrypted_keys })
+    Ok(KeyAgreeRecipientInfo {
+        version,
+        originator,
+        key_encryption_algorithm,
+        recipient_encrypted_keys,
+    })
 }
 
 /// A pluggable backend for `EnvelopedData` key recovery and content decryption.

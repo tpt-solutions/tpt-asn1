@@ -56,9 +56,10 @@ pub mod util;
 pub mod writer;
 
 pub use any::Any;
+pub use decode::{read_sequence, read_set, Decode, Encode};
+#[cfg(feature = "alloc")]
 pub use decode::{
-    read_sequence, read_sequence_of, read_sequence_of_content, read_set, read_set_of,
-    read_set_of_content, retag_implicit, Decode, Encode,
+    read_sequence_of, read_sequence_of_content, read_set_of, read_set_of_content, retag_implicit,
 };
 pub use error::Error;
 pub use length::Length;

@@ -83,9 +83,8 @@ fn verify_signer<B: tpt_x509::verify::SignatureVerifier>(
         Some(attrs) => {
             let content = content.ok_or(Error::MissingContent)?;
             // Compute the digest and check the message-digest attribute.
-            let digest = backend
-                .digest(signer.digest_algorithm_bytes(), content)
-                .map_err(map_verify_err)?;
+            let digest =
+                backend.digest(signer.digest_algorithm_bytes(), content).map_err(map_verify_err)?;
             match attrs.find(oid::ATTR_MESSAGE_DIGEST).and_then(|a| a.first_value()) {
                 Some(md) => {
                     let md_bytes = OctetString::decode(&mut tpt_asn1_core::reader::Reader::new(

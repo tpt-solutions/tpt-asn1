@@ -85,7 +85,8 @@ impl<'a> Decode<'a> for EnvelopedData<'a> {
             };
             let _ = value; // originatorInfo content (unused for decrypt here)
 
-            let mut ri_r = Reader::new(recipient_infos_content, tpt_asn1_core::reader::Config::der());
+            let mut ri_r =
+                Reader::new(recipient_infos_content, tpt_asn1_core::reader::Config::der());
             let mut recipient_infos = alloc::vec::Vec::new();
             while !ri_r.is_empty() {
                 recipient_infos.push(RecipientInfo::decode(&mut ri_r)?);
@@ -138,14 +139,12 @@ pub fn decrypt<B: EnvelopeBackend>(
     private_key_der: &[u8],
     backend: &B,
 ) -> Result<alloc::vec::Vec<u8>> {
-    let recipient = ed
-        .recipient_infos
-        .get(recipient_index)
-        .ok_or(Error::UnexpectedStructure)?;
+    let recipient = ed.recipient_infos.get(recipient_index).ok_or(Error::UnexpectedStructure)?;
     let ktri = recipient.as_key_trans().ok_or(Error::UnsupportedAlgorithm)?;
 
     let cek = backend.rsa_unwrap(ktri.encrypted_key, private_key_der)?;
-    let encrypted_content = ed.encrypted_content_info.encrypted_content.ok_or(Error::MissingContent)?;
+    let encrypted_content =
+        ed.encrypted_content_info.encrypted_content.ok_or(Error::MissingContent)?;
     backend.decrypt_content(
         ed.encrypted_content_info.content_enc_alg_bytes(),
         &cek,

@@ -1,4 +1,4 @@
-﻿//! Minimal example: decode an X.509 certificate from a file and inspect it.
+//! Minimal example: decode an X.509 certificate from a file and inspect it.
 //!
 //! Run with: `cargo run -p tpt-x509 --example validate -- <cert.der>`
 

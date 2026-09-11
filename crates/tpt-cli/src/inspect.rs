@@ -50,7 +50,11 @@ pub fn parse_tlvs(input: &[u8], opts: &InspectOptions) -> Result<Vec<TlvNode>, C
     parse_tlvs_at(input, opts, 0)
 }
 
-fn parse_tlvs_at(input: &[u8], opts: &InspectOptions, depth: usize) -> Result<Vec<TlvNode>, CoreError> {
+fn parse_tlvs_at(
+    input: &[u8],
+    opts: &InspectOptions,
+    depth: usize,
+) -> Result<Vec<TlvNode>, CoreError> {
     let mut r = Reader::new(input, opts.config);
     let mut out = Vec::new();
     while !r.is_empty() {
@@ -59,7 +63,11 @@ fn parse_tlvs_at(input: &[u8], opts: &InspectOptions, depth: usize) -> Result<Ve
     Ok(out)
 }
 
-fn parse_one(r: &mut Reader<'_>, opts: &InspectOptions, depth: usize) -> Result<TlvNode, CoreError> {
+fn parse_one(
+    r: &mut Reader<'_>,
+    opts: &InspectOptions,
+    depth: usize,
+) -> Result<TlvNode, CoreError> {
     let start = r.position();
     let (tag, length, value) = r.read_tlv()?;
     let end = r.position();
@@ -82,7 +90,8 @@ fn parse_one(r: &mut Reader<'_>, opts: &InspectOptions, depth: usize) -> Result<
                 node.summary = format!("{} element(s)", node.children.len());
             }
             Err(_) => {
-                node.summary = format!("(unparseable constructed) {}", hex_preview(value, opts.show_bytes));
+                node.summary =
+                    format!("(unparseable constructed) {}", hex_preview(value, opts.show_bytes));
             }
         }
     } else {
@@ -91,12 +100,14 @@ fn parse_one(r: &mut Reader<'_>, opts: &InspectOptions, depth: usize) -> Result<
             if tag.is_universal(Tag::OCTET_STRING) {
                 if let Some(ch) = try_embedded(value, opts, depth) {
                     node.children = ch;
-                    node.summary = format!("octet string, embedded DER ({} elem)", node.children.len());
+                    node.summary =
+                        format!("octet string, embedded DER ({} elem)", node.children.len());
                 }
             } else if tag.is_universal(Tag::BIT_STRING) && !value.is_empty() && value[0] == 0 {
                 if let Some(ch) = try_embedded(&value[1..], opts, depth) {
                     node.children = ch;
-                    node.summary = format!("bit string, embedded DER ({} elem)", node.children.len());
+                    node.summary =
+                        format!("bit string, embedded DER ({} elem)", node.children.len());
                 }
             }
         }
@@ -204,12 +215,11 @@ fn summarize(tag: &Tag, _len: &Length, value: &[u8], opts: &InspectOptions) -> S
     if u && n == Tag::RELATIVE_OID {
         return oid_string(value, true);
     }
-    if u
-        && (n == Tag::UTF8_STRING
-            || n == Tag::PRINTABLE_STRING
-            || n == Tag::IA5_STRING
-            || n == Tag::VISIBLE_STRING
-            || n == Tag::NUMERIC_STRING)
+    if u && (n == Tag::UTF8_STRING
+        || n == Tag::PRINTABLE_STRING
+        || n == Tag::IA5_STRING
+        || n == Tag::VISIBLE_STRING
+        || n == Tag::NUMERIC_STRING)
     {
         if let Ok(s) = std::str::from_utf8(value) {
             return format!("{:?}", s);
@@ -266,7 +276,13 @@ fn oid_string(bytes: &[u8], relative: bool) -> String {
     } else {
         match arcs.split_first() {
             Some((&first, rest)) => {
-                let a0 = if first < 40 { 0 } else if first < 80 { 1 } else { 2 };
+                let a0 = if first < 40 {
+                    0
+                } else if first < 80 {
+                    1
+                } else {
+                    2
+                };
                 let a1 = first - a0 * 40;
                 let mut s = format!("{a0}.{a1}");
                 for a in rest {
@@ -288,7 +304,8 @@ fn hex_preview(bytes: &[u8], full: bool) -> String {
     if full || bytes.len() <= LIMIT {
         bytes.iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" ")
     } else {
-        let head: String = bytes[..LIMIT].iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" ");
+        let head: String =
+            bytes[..LIMIT].iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" ");
         format!("{head} … ({} bytes)", bytes.len())
     }
 }
@@ -316,11 +333,7 @@ pub fn print_text(nodes: &[TlvNode], block_label: Option<&str>) {
 
 fn print_node(n: &TlvNode, depth: usize, color: bool, out: &mut String) {
     let indent = "  ".repeat(depth);
-    let label = if color {
-        colorize(&n.tag_label, "36")
-    } else {
-        n.tag_label.clone()
-    };
+    let label = if color { colorize(&n.tag_label, "36") } else { n.tag_label.clone() };
     let _ = writeln!(
         out,
         "{indent}{offset}: {label}  {summary}  [{begin}..{end}]",

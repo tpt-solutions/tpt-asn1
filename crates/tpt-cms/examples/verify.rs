@@ -1,4 +1,4 @@
-﻿//! Minimal example: decode a CMS `ContentInfo` and inspect its `SignedData`.
+//! Minimal example: decode a CMS `ContentInfo` and inspect its `SignedData`.
 //!
 //! Run with: `cargo run -p tpt-cms --example verify -- <message.der>`
 
@@ -12,9 +12,7 @@ fn main() {
     let ci = decode::<ContentInfo>(&der).expect("decode ContentInfo");
     println!("content type OID: {:?}", ci.content_type.as_bytes());
 
-    let sd = ci
-        .decode_content::<SignedData>()
-        .expect("decode SignedData");
+    let sd = ci.decode_content::<SignedData>().expect("decode SignedData");
     println!("signer infos: {}", sd.signer_infos.len());
     println!("embedded content present: {}", sd.content_bytes().is_some());
 }

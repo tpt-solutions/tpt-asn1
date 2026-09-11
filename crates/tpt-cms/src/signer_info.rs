@@ -17,11 +17,11 @@
 //!     subjectKeyIdentifier  [0] IMPLICIT SubjectKeyIdentifier }
 //! ```
 
-use crate::attributes::{Attribute, decode_attribute_set};
+use crate::algorithm::AlgorithmIdentifier;
+use crate::attributes::{decode_attribute_set, Attribute};
+use crate::cert::CertFields;
 use crate::error::{Error, Result};
 use crate::oid;
-use crate::algorithm::AlgorithmIdentifier;
-use crate::cert::CertFields;
 use tpt_asn1_core::decode::Decode;
 use tpt_asn1_core::reader::Reader;
 use tpt_asn1_core::tag::Tag;
@@ -123,12 +123,10 @@ impl<'a> SignerInfo<'a> {
     /// Constant-time match of this signer against an extracted certificate.
     pub fn matches_cert(&self, cert: &CertFields<'a>) -> bool {
         match &self.sid {
-            SignerIdentifier::SubjectKeyIdentifier(id) => {
-                match cert.subject_key_id {
-                    Some(ski) => constant_time_eq(ski, id),
-                    None => false,
-                }
-            }
+            SignerIdentifier::SubjectKeyIdentifier(id) => match cert.subject_key_id {
+                Some(ski) => constant_time_eq(ski, id),
+                None => false,
+            },
             SignerIdentifier::IssuerAndSerialNumber { issuer, serial } => {
                 constant_time_eq(cert.issuer, issuer) && constant_time_eq(cert.serial, serial)
             }
@@ -172,8 +170,15 @@ impl<'a> Decode<'a> for SignerInfo<'a> {
                     let full = s.slice(start, s.position());
                     let mut sig_r = Reader::new(full, tpt_asn1_core::reader::Config::der());
                     let signature_algorithm = AlgorithmIdentifier::decode(&mut sig_r)?;
-                    return finish_signer(s, version, sid, digest_algorithm, None, signature_algorithm)
-                        .map_err(Into::into);
+                    return finish_signer(
+                        s,
+                        version,
+                        sid,
+                        digest_algorithm,
+                        None,
+                        signature_algorithm,
+                    )
+                    .map_err(Into::into);
                 }
             };
 

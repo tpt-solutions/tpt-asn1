@@ -127,10 +127,7 @@ pub struct RelativeDistinguishedName<'a> {
 impl<'a> RelativeDistinguishedName<'a> {
     /// Find the first attribute whose type OID equals `expected`.
     pub fn find(&self, expected: oid::Oid) -> Option<&AttributeValue<'a>> {
-        self.attributes
-            .iter()
-            .find(|a| oid::oid_eq(&a.type_id, expected))
-            .map(|a| &a.value)
+        self.attributes.iter().find(|a| oid::oid_eq(&a.type_id, expected)).map(|a| &a.value)
     }
 }
 
@@ -179,10 +176,8 @@ impl<'a> Name<'a> {
                 return false;
             }
             for ava in &a.attributes {
-                let Some(other_ava) = b
-                    .attributes
-                    .iter()
-                    .find(|x| x.type_id.as_bytes() == ava.type_id.as_bytes())
+                let Some(other_ava) =
+                    b.attributes.iter().find(|x| x.type_id.as_bytes() == ava.type_id.as_bytes())
                 else {
                     return false;
                 };

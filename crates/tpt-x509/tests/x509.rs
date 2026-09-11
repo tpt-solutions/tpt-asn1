@@ -3,9 +3,9 @@
 //! Integration tests for `tpt-x509`: decode real-shaped X.509 structures built
 //! with the core writer, plus RFC 5280 §6.1 path-building/validation.
 
+use tpt_asn1_core::decode;
 use tpt_asn1_core::tag::Tag;
 use tpt_asn1_core::writer::{encode_to_vec, Writer};
-use tpt_asn1_core::decode;
 
 use tpt_x509::chain::{build_and_validate, PathConfig, TrustAnchor};
 use tpt_x509::extensions::key_usage_bit;
@@ -255,21 +255,11 @@ fn decode_ca_certificate() {
     assert_eq!(cert.tbs.issuer.rdns().len(), 1);
     assert!(cert.tbs.is_ca());
 
-    let bc = cert
-        .tbs
-        .extensions
-        .basic_constraints()
-        .expect("bc decode")
-        .expect("bc present");
+    let bc = cert.tbs.extensions.basic_constraints().expect("bc decode").expect("bc present");
     assert!(bc.ca);
     assert_eq!(bc.path_len_constraint, None);
 
-    let ku = cert
-        .tbs
-        .extensions
-        .key_usage()
-        .expect("ku decode")
-        .expect("ku present");
+    let ku = cert.tbs.extensions.key_usage().expect("ku decode").expect("ku present");
     assert!(ku.is_set(key_usage_bit::KEY_CERT_SIGN));
     assert!(!ku.is_set(key_usage_bit::DIGITAL_SIGNATURE));
 }
@@ -282,12 +272,7 @@ fn decode_ee_with_san() {
     let cert = decode::<Certificate<'_>>(&der).expect("decode EE");
 
     assert!(!cert.tbs.is_ca());
-    let san = cert
-        .tbs
-        .extensions
-        .subject_alt_name()
-        .expect("san decode")
-        .expect("san present");
+    let san = cert.tbs.extensions.subject_alt_name().expect("san decode").expect("san present");
     let dns = san.names.iter().find_map(|n| n.dns()).expect("has dns");
     assert_eq!(dns, b"example.com");
 }
@@ -343,7 +328,11 @@ fn chain_build_and_validate_ok() {
         &ee,
         &[],
         &anchors,
-        PathConfig { time: UnixTime::from_secs(1_893_196_800), verifier: &AcceptAll, max_path_length: None },
+        PathConfig {
+            time: UnixTime::from_secs(1_893_196_800),
+            verifier: &AcceptAll,
+            max_path_length: None,
+        },
     )
     .expect("path validates");
     assert_eq!(path.certs.len(), 1);
@@ -357,7 +346,11 @@ fn chain_unable_to_build_without_issuer() {
         &ee,
         &[],
         &[],
-        PathConfig { time: UnixTime::from_secs(1_893_196_800), verifier: &AcceptAll, max_path_length: None },
+        PathConfig {
+            time: UnixTime::from_secs(1_893_196_800),
+            verifier: &AcceptAll,
+            max_path_length: None,
+        },
     );
     assert!(result.is_err());
 }
@@ -384,7 +377,11 @@ fn chain_rejects_non_ca_intermediate() {
         &ee,
         &intermediates,
         &anchors,
-        PathConfig { time: UnixTime::from_secs(1_893_196_800), verifier: &AcceptAll, max_path_length: None },
+        PathConfig {
+            time: UnixTime::from_secs(1_893_196_800),
+            verifier: &AcceptAll,
+            max_path_length: None,
+        },
     );
     assert!(result.is_err());
 }
@@ -396,4 +393,3 @@ fn time_parse_unix() {
     let u = t.to_unix().unwrap();
     assert_eq!(u.as_secs(), 946_684_800);
 }
-

@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use tpt_asn1_core::any::Any;
 use tpt_asn1_core::decode::{read_sequence, Decode};
 use tpt_asn1_core::error::Result;
-use tpt_asn1_core::reader::{Reader};
+use tpt_asn1_core::reader::Reader;
 use tpt_asn1_core::tag::Tag;
 use tpt_asn1_core::types::{BitString, Integer};
 
@@ -68,9 +68,7 @@ impl<'a> CertificateList<'a> {
 
     /// Returns `true` if `serial` (raw bytes) is present and revoked as of `now`.
     pub fn is_revoked(&self, serial: &[u8], now: UnixTime) -> bool {
-        self.revoked
-            .iter()
-            .any(|r| r.serial_number_bytes() == serial && r.is_revoked_at(now))
+        self.revoked.iter().any(|r| r.serial_number_bytes() == serial && r.is_revoked_at(now))
     }
 }
 

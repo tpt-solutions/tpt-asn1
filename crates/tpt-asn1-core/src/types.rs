@@ -384,7 +384,7 @@ impl<'a> Iterator for OidIter<'a> {
             if value > (u64::MAX >> 7) {
                 // The subidentifier exceeds u64; skip its remaining base-128
                 // digits (so the cursor stays aligned) and stop iteration.
-                while self.remaining.first().map_or(false, |x| x & 0x80 != 0) {
+                while self.remaining.first().is_some_and(|x| x & 0x80 != 0) {
                     self.remaining = &self.remaining[1..];
                 }
                 return None;

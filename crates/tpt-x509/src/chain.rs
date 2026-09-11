@@ -20,9 +20,7 @@
 use alloc::vec::Vec;
 
 use crate::certificate::Certificate;
-use crate::extensions::{
-    AuthorityKeyIdentifier, CertificatePolicies, GeneralName, GeneralSubtree,
-};
+use crate::extensions::{AuthorityKeyIdentifier, CertificatePolicies, GeneralName, GeneralSubtree};
 use crate::name::Name;
 use crate::spki::SubjectPublicKeyInfo;
 use crate::time::UnixTime;
@@ -42,13 +40,8 @@ pub struct TrustAnchor<'a> {
 impl<'a> TrustAnchor<'a> {
     /// Build a trust anchor from a (self-signed) CA certificate.
     pub fn from_cert(cert: &'a Certificate<'a>) -> Self {
-        let key_id = cert
-            .tbs
-            .extensions
-            .subject_key_identifier()
-            .ok()
-            .flatten()
-            .map(|s| s.as_bytes());
+        let key_id =
+            cert.tbs.extensions.subject_key_identifier().ok().flatten().map(|s| s.as_bytes());
         TrustAnchor {
             name: cert.tbs.subject.clone(),
             public_key: cert.tbs.subject_public_key_info,
@@ -154,25 +147,16 @@ impl<'a> IssuerRef<'a> {
 
     fn key_id(&self) -> Option<&'a [u8]> {
         match self {
-            IssuerRef::Cert(c) => c
-                .tbs
-                .extensions
-                .subject_key_identifier()
-                .ok()
-                .flatten()
-                .map(|s| s.as_bytes()),
+            IssuerRef::Cert(c) => {
+                c.tbs.extensions.subject_key_identifier().ok().flatten().map(|s| s.as_bytes())
+            }
             IssuerRef::Anchor(a) => a.key_id,
         }
     }
 
     fn authority_key_id(&self) -> Option<AuthorityKeyIdentifier<'a>> {
         match self {
-            IssuerRef::Cert(c) => c
-                .tbs
-                .extensions
-                .authority_key_identifier()
-                .ok()
-                .flatten(),
+            IssuerRef::Cert(c) => c.tbs.extensions.authority_key_identifier().ok().flatten(),
             IssuerRef::Anchor(_) => None,
         }
     }
@@ -242,7 +226,10 @@ fn find_issuer<'a>(
     })
 }
 
-fn find_anchor<'a>(cert: &'a Certificate<'a>, anchors: &'a [TrustAnchor<'a>]) -> Option<&'a TrustAnchor<'a>> {
+fn find_anchor<'a>(
+    cert: &'a Certificate<'a>,
+    anchors: &'a [TrustAnchor<'a>],
+) -> Option<&'a TrustAnchor<'a>> {
     let aki = cert.tbs.extensions.authority_key_identifier().ok().flatten();
     anchors.iter().find(|a| {
         a.name.der_eq(&cert.tbs.issuer)
@@ -276,12 +263,7 @@ fn validate_path<'a>(path: &ValidatedPath<'a>, config: PathConfig<'a>) -> Result
 
         if is_ca_cert {
             // 3. BasicConstraints.
-            let bc = cert
-                .tbs
-                .extensions
-                .basic_constraints()
-                .ok()
-                .flatten();
+            let bc = cert.tbs.extensions.basic_constraints().ok().flatten();
             match bc {
                 Some(bc) if bc.ca => {
                     if let Some(limit) = bc.path_len_constraint {
@@ -456,8 +438,5 @@ fn ip_within(child: &[u8], parent: &[u8]) -> bool {
 }
 
 fn masked_ip_match(child: &[u8], addr: &[u8], mask: &[u8]) -> bool {
-    child
-        .iter()
-        .zip(addr.iter().zip(mask.iter()))
-        .all(|(c, (a, m))| c & m == a & m)
+    child.iter().zip(addr.iter().zip(mask.iter())).all(|(c, (a, m))| c & m == a & m)
 }

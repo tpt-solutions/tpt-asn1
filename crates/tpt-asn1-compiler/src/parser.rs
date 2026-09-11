@@ -323,9 +323,7 @@ impl<'a> Parser<'a> {
                 self.next();
                 Ok(DefaultValue::Integer(n))
             }
-            other => Err(CompilerError::parse(format!(
-                "unsupported DEFAULT value: {other:?}"
-            ))),
+            other => Err(CompilerError::parse(format!("unsupported DEFAULT value: {other:?}"))),
         }
     }
 }

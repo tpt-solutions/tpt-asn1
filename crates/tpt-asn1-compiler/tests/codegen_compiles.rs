@@ -63,15 +63,15 @@ fn find_core_rlib() -> Option<PathBuf> {
                 let deps = target.join(profile).join("deps");
                 if deps.is_dir() {
                     if let Ok(entries) = fs::read_dir(&deps) {
-                            for e in entries.flatten() {
-                                let name = e.file_name().to_string_lossy().into_owned();
-                                let is_core = name.starts_with("libtpt_asn1_core-")
-                                    || name.starts_with("tpt_asn1_core-");
-                                if is_core && name.ends_with(".rlib") {
-                                    return Some(e.path());
-                                }
+                        for e in entries.flatten() {
+                            let name = e.file_name().to_string_lossy().into_owned();
+                            let is_core = name.starts_with("libtpt_asn1_core-")
+                                || name.starts_with("tpt_asn1_core-");
+                            if is_core && name.ends_with(".rlib") {
+                                return Some(e.path());
                             }
                         }
+                    }
                 }
             }
         }

@@ -3,7 +3,7 @@
 //! `AlgorithmIdentifier` — `SEQUENCE { algorithm OID, parameters ANY OPTIONAL }`.
 
 use tpt_asn1_core::any::Any;
-use tpt_asn1_core::decode::{Decode, read_sequence};
+use tpt_asn1_core::decode::{read_sequence, Decode};
 use tpt_asn1_core::reader::Reader;
 use tpt_asn1_core::types::ObjectIdentifier;
 
@@ -27,11 +27,7 @@ impl<'a> Decode<'a> for AlgorithmIdentifier<'a> {
     fn decode(r: &mut Reader<'a>) -> tpt_asn1_core::error::Result<Self> {
         read_sequence(r, |inner| {
             let algorithm = ObjectIdentifier::decode(inner)?;
-            let parameters = if inner.is_empty() {
-                None
-            } else {
-                Some(Any::decode(inner)?)
-            };
+            let parameters = if inner.is_empty() { None } else { Some(Any::decode(inner)?) };
             Ok(AlgorithmIdentifier { algorithm, parameters })
         })
     }

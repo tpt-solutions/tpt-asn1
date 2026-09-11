@@ -9,10 +9,10 @@ use tpt_asn1_compiler::generate;
 fn dogfood_example_schema() {
     // Read the example schema
     let src = include_str!("../examples/example.tpt-asn1");
-    
+
     // Generate code
     let code = generate(src).expect("Failed to generate code from example schema");
-    
+
     // Verify key types are generated
     assert!(code.contains("pub struct AlgorithmIdentifier"));
     assert!(code.contains("pub enum Color"));
@@ -26,12 +26,12 @@ fn dogfood_example_schema() {
     assert!(code.contains("pub struct GeneralNames<"));
     assert!(code.contains("pub type CertificateSerialNumber"));
     assert!(code.contains("pub type SignatureValue"));
-    
+
     // Verify key traits are implemented
     assert!(code.contains("impl"));
     assert!(code.contains("Decode"));
     assert!(code.contains("Encode"));
-    
+
     println!("Generated code structure verified");
 }
 

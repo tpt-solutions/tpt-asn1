@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: MIT OR Apache-2.0
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Best-effort PKITS-style validation harness.
 //!
@@ -9,9 +9,9 @@
 //! the official vectors are acquired, map each group to a function here and feed
 //! the real fixtures through `build_and_validate`.
 
+use tpt_asn1_core::decode;
 use tpt_asn1_core::tag::Tag;
 use tpt_asn1_core::writer::{encode_to_vec, Writer};
-use tpt_asn1_core::decode;
 
 use tpt_x509::chain::{build_and_validate, PathConfig, TrustAnchor};
 use tpt_x509::verify::{SignatureVerifier, VerifyError};
@@ -35,11 +35,14 @@ fn name(cn: &str) -> Vec<u8> {
     encode_to_vec(&NameBuilder { cn }).unwrap()
 }
 
-struct NameBuilder<'a> { cn: &'a str }
+struct NameBuilder<'a> {
+    cn: &'a str,
+}
 
 impl tpt_asn1_core::Encode for NameBuilder<'_> {
     fn encode<W: tpt_asn1_core::writer::WriteBackend>(
-        &self, w: &mut Writer<W>,
+        &self,
+        w: &mut Writer<W>,
     ) -> tpt_asn1_core::error::Result<()> {
         w.nested(Tag::universal_constructed(Tag::SEQUENCE), |w| {
             w.nested(Tag::universal_constructed(Tag::SET), |w| {
@@ -54,22 +57,32 @@ impl tpt_asn1_core::Encode for NameBuilder<'_> {
 }
 
 fn build_cert(
-    issuer_cn: &str, subject_cn: &str, is_ca: bool, serial: &[u8], extensions: &[Vec<u8>],
+    issuer_cn: &str,
+    subject_cn: &str,
+    is_ca: bool,
+    serial: &[u8],
+    extensions: &[Vec<u8>],
 ) -> Vec<u8> {
     let tbs = build_tbs(issuer_cn, subject_cn, is_ca, serial, extensions);
     encode_to_vec(&CertBuilder { tbs }).unwrap()
 }
 
-struct CertBuilder { tbs: Vec<u8> }
+struct CertBuilder {
+    tbs: Vec<u8>,
+}
 
 impl tpt_asn1_core::Encode for CertBuilder {
     fn encode<W: tpt_asn1_core::writer::WriteBackend>(
-        &self, w: &mut Writer<W>,
+        &self,
+        w: &mut Writer<W>,
     ) -> tpt_asn1_core::error::Result<()> {
         w.nested(Tag::universal_constructed(Tag::SEQUENCE), |w| {
             w.write_bytes(&self.tbs)?;
             w.nested(Tag::universal_constructed(Tag::SEQUENCE), |w| {
-                w.write_primitive(Tag::universal(Tag::OBJECT_IDENTIFIER), &[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x0b])?;
+                w.write_primitive(
+                    Tag::universal(Tag::OBJECT_IDENTIFIER),
+                    &[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x0b],
+                )?;
                 w.write_primitive(Tag::universal(Tag::NULL), &[])?;
                 Ok(())
             })?;
@@ -80,12 +93,14 @@ impl tpt_asn1_core::Encode for CertBuilder {
 }
 
 fn build_tbs(
-    issuer_cn: &str, subject_cn: &str, is_ca: bool, serial: &[u8], extensions: &[Vec<u8>],
+    issuer_cn: &str,
+    subject_cn: &str,
+    is_ca: bool,
+    serial: &[u8],
+    extensions: &[Vec<u8>],
 ) -> Vec<u8> {
-    encode_to_vec(&TbsBuilder {
-        issuer_cn, subject_cn, is_ca, serial: serial.to_vec(), extensions,
-    })
-    .unwrap()
+    encode_to_vec(&TbsBuilder { issuer_cn, subject_cn, is_ca, serial: serial.to_vec(), extensions })
+        .unwrap()
 }
 
 struct TbsBuilder<'a> {
@@ -99,7 +114,8 @@ struct TbsBuilder<'a> {
 
 impl tpt_asn1_core::Encode for TbsBuilder<'_> {
     fn encode<W: tpt_asn1_core::writer::WriteBackend>(
-        &self, w: &mut Writer<W>,
+        &self,
+        w: &mut Writer<W>,
     ) -> tpt_asn1_core::error::Result<()> {
         w.nested(Tag::universal_constructed(Tag::SEQUENCE), |w| {
             w.nested(Tag::context(true, 0), |w| {
@@ -107,7 +123,10 @@ impl tpt_asn1_core::Encode for TbsBuilder<'_> {
             })?;
             w.write_primitive(Tag::universal(Tag::INTEGER), &self.serial)?;
             w.nested(Tag::universal_constructed(Tag::SEQUENCE), |w| {
-                w.write_primitive(Tag::universal(Tag::OBJECT_IDENTIFIER), &[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x0b])?;
+                w.write_primitive(
+                    Tag::universal(Tag::OBJECT_IDENTIFIER),
+                    &[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x0b],
+                )?;
                 w.write_primitive(Tag::universal(Tag::NULL), &[])
             })?;
             w.write_bytes(&name(self.issuer_cn))?;
@@ -118,7 +137,10 @@ impl tpt_asn1_core::Encode for TbsBuilder<'_> {
             w.write_bytes(&name(self.subject_cn))?;
             w.nested(Tag::universal_constructed(Tag::SEQUENCE), |w| {
                 w.nested(Tag::universal_constructed(Tag::SEQUENCE), |w| {
-                    w.write_primitive(Tag::universal(Tag::OBJECT_IDENTIFIER), &[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01])?;
+                    w.write_primitive(
+                        Tag::universal(Tag::OBJECT_IDENTIFIER),
+                        &[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01],
+                    )?;
                     w.write_primitive(Tag::universal(Tag::NULL), &[])
                 })?;
                 w.write_primitive(Tag::universal(Tag::BIT_STRING), &[0x00, 0x01, 0x02, 0x03])
@@ -142,11 +164,16 @@ fn extension(oid_content: &[u8], critical: bool, value: &[u8]) -> Vec<u8> {
     encode_to_vec(&ExtBuilder { oid_content, critical, value }).unwrap()
 }
 
-struct ExtBuilder<'a> { oid_content: &'a [u8], critical: bool, value: &'a [u8] }
+struct ExtBuilder<'a> {
+    oid_content: &'a [u8],
+    critical: bool,
+    value: &'a [u8],
+}
 
 impl tpt_asn1_core::Encode for ExtBuilder<'_> {
     fn encode<W: tpt_asn1_core::writer::WriteBackend>(
-        &self, w: &mut Writer<W>,
+        &self,
+        w: &mut Writer<W>,
     ) -> tpt_asn1_core::error::Result<()> {
         w.nested(Tag::universal_constructed(Tag::SEQUENCE), |w| {
             w.write_primitive(Tag::universal(Tag::OBJECT_IDENTIFIER), self.oid_content)?;
@@ -191,8 +218,12 @@ impl SignatureVerifier for AcceptAll {
         Ok(Vec::new())
     }
     fn verify_signature(
-        &self, _sig_alg_oid: &[u8], _key_alg_oid: &[u8], _public_key: &[u8],
-        _message: &[u8], _signature: &[u8],
+        &self,
+        _sig_alg_oid: &[u8],
+        _key_alg_oid: &[u8],
+        _public_key: &[u8],
+        _message: &[u8],
+        _signature: &[u8],
     ) -> Result<bool, VerifyError> {
         Ok(true)
     }
@@ -204,8 +235,10 @@ const AFTER_EXPIRY: UnixTime = UnixTime(4_102_444_800); // 2100-01-01
 // --- PKITS Group 4.1: Valid Certificate Path ---------------------------------
 #[test]
 fn pkits_4_1_valid_path() {
-    let root_exts = vec![extension(OID_BASIC_CONSTRAINTS, true, &basic_constraints_ca_true()),
-                         extension(OID_KEY_USAGE, false, &key_usage_key_cert_sign())];
+    let root_exts = vec![
+        extension(OID_BASIC_CONSTRAINTS, true, &basic_constraints_ca_true()),
+        extension(OID_KEY_USAGE, false, &key_usage_key_cert_sign()),
+    ];
     let root_der = build_cert("Root", "Root", true, &[0x01], &root_exts);
     let root = decode::<Certificate>(&root_der).unwrap();
     let anchor = TrustAnchor::from_cert(&root);
@@ -215,7 +248,9 @@ fn pkits_4_1_valid_path() {
 
     let anchors = [anchor];
     let result = build_and_validate(
-        &ee, &[], &anchors,
+        &ee,
+        &[],
+        &anchors,
         PathConfig { time: VALID_TIME, verifier: &AcceptAll, max_path_length: None },
     );
     assert!(result.is_ok(), "valid path should validate: {:?}", result.err());
@@ -224,8 +259,10 @@ fn pkits_4_1_valid_path() {
 // --- PKITS Group 4.1.2.2: Invalid validity period ---------------------------
 #[test]
 fn pkits_4_1_2_2_expired() {
-    let root_exts = vec![extension(OID_BASIC_CONSTRAINTS, true, &basic_constraints_ca_true()),
-                         extension(OID_KEY_USAGE, false, &key_usage_key_cert_sign())];
+    let root_exts = vec![
+        extension(OID_BASIC_CONSTRAINTS, true, &basic_constraints_ca_true()),
+        extension(OID_KEY_USAGE, false, &key_usage_key_cert_sign()),
+    ];
     let root_der = build_cert("Root", "Root", true, &[0x01], &root_exts);
     let root = decode::<Certificate>(&root_der).unwrap();
     let anchor = TrustAnchor::from_cert(&root);
@@ -235,7 +272,9 @@ fn pkits_4_1_2_2_expired() {
 
     let anchors = [anchor];
     let result = build_and_validate(
-        &ee, &[], &anchors,
+        &ee,
+        &[],
+        &anchors,
         PathConfig { time: AFTER_EXPIRY, verifier: &AcceptAll, max_path_length: None },
     );
     assert!(result.is_err(), "expired cert must be rejected");
@@ -244,8 +283,10 @@ fn pkits_4_1_2_2_expired() {
 // --- PKITS Group 4.3.1: BasicConstraints -- CA cert required ----------------
 #[test]
 fn pkits_4_3_1_non_ca_intermediate() {
-    let root_exts = vec![extension(OID_BASIC_CONSTRAINTS, true, &basic_constraints_ca_true()),
-                         extension(OID_KEY_USAGE, false, &key_usage_key_cert_sign())];
+    let root_exts = vec![
+        extension(OID_BASIC_CONSTRAINTS, true, &basic_constraints_ca_true()),
+        extension(OID_KEY_USAGE, false, &key_usage_key_cert_sign()),
+    ];
     let root_der = build_cert("Root", "Root", true, &[0x01], &root_exts);
     let root = decode::<Certificate>(&root_der).unwrap();
     let anchor = TrustAnchor::from_cert(&root);
@@ -258,7 +299,9 @@ fn pkits_4_3_1_non_ca_intermediate() {
     let intermediates = [inter];
     let anchors = [anchor];
     let result = build_and_validate(
-        &ee, &intermediates, &anchors,
+        &ee,
+        &intermediates,
+        &anchors,
         PathConfig { time: VALID_TIME, verifier: &AcceptAll, max_path_length: None },
     );
     assert!(result.is_err(), "non-CA intermediate must be rejected");
@@ -277,14 +320,18 @@ fn pkits_4_4_1_unknown_critical() {
 fn pkits_4_5_1_ca_missing_keycertsign() {
     // Root anchor is fine; the *intermediate* CA has a KeyUsage that omits
     // keyCertSign, which must be rejected during path validation.
-    let root_exts = vec![extension(OID_BASIC_CONSTRAINTS, true, &basic_constraints_ca_true()),
-                         extension(OID_KEY_USAGE, false, &key_usage_key_cert_sign())];
+    let root_exts = vec![
+        extension(OID_BASIC_CONSTRAINTS, true, &basic_constraints_ca_true()),
+        extension(OID_KEY_USAGE, false, &key_usage_key_cert_sign()),
+    ];
     let root_der = build_cert("Root", "Root", true, &[0x01], &root_exts);
     let root = decode::<Certificate>(&root_der).unwrap();
     let anchor = TrustAnchor::from_cert(&root);
 
-    let inter_exts = vec![extension(OID_BASIC_CONSTRAINTS, true, &basic_constraints_ca_true()),
-                          extension(OID_KEY_USAGE, false, &key_usage_without_keycertsign())];
+    let inter_exts = vec![
+        extension(OID_BASIC_CONSTRAINTS, true, &basic_constraints_ca_true()),
+        extension(OID_KEY_USAGE, false, &key_usage_without_keycertsign()),
+    ];
     let inter_der = build_cert("Root", "Inter", true, &[0x03], &inter_exts);
     let inter = decode::<Certificate>(&inter_der).unwrap();
     let ee_der = build_cert("Inter", "EE", false, &[0x04], &[]);
@@ -293,7 +340,9 @@ fn pkits_4_5_1_ca_missing_keycertsign() {
     let intermediates = [inter];
     let anchors = [anchor];
     let result = build_and_validate(
-        &ee, &intermediates, &anchors,
+        &ee,
+        &intermediates,
+        &anchors,
         PathConfig { time: VALID_TIME, verifier: &AcceptAll, max_path_length: None },
     );
     assert!(result.is_err(), "CA missing keyCertSign must be rejected");

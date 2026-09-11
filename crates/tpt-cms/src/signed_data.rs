@@ -55,10 +55,9 @@ impl<'a> SignedData<'a> {
     /// structures otherwise decode identically.
     pub fn is_pkcs7_legacy(&self) -> bool {
         self.version == 1
-            && self
-                .signer_infos
-                .iter()
-                .all(|si| matches!(si.sid, crate::signer_info::SignerIdentifier::IssuerAndSerialNumber { .. }))
+            && self.signer_infos.iter().all(|si| {
+                matches!(si.sid, crate::signer_info::SignerIdentifier::IssuerAndSerialNumber { .. })
+            })
     }
 
     /// The encapsulated content bytes, or `None` if this is a detached signature.
@@ -86,8 +85,9 @@ impl<'a> Decode<'a> for SignedData<'a> {
             let version = Integer::decode(inner)?.as_u64().ok_or(Error::UnsupportedVersion)?;
 
             // digestAlgorithms ::= SET OF AlgorithmIdentifier
-            let digest_algorithms = tpt_asn1_core::decode::read_set_of::<AlgorithmIdentifier<'_>>(inner)
-                .map_err(Error::from)?;
+            let digest_algorithms =
+                tpt_asn1_core::decode::read_set_of::<AlgorithmIdentifier<'_>>(inner)
+                    .map_err(Error::from)?;
 
             // encapContentInfo
             let (e_content_type, e_content) = decode_encap_content_info(inner)?;
@@ -170,7 +170,8 @@ fn decode_encap_content_info<'a>(
                 return Err(Error::UnexpectedStructure.into());
             }
             // value is the inner OCTET STRING TLV.
-            let os = OctetString::decode(&mut Reader::new(value, tpt_asn1_core::reader::Config::der()))?;
+            let os =
+                OctetString::decode(&mut Reader::new(value, tpt_asn1_core::reader::Config::der()))?;
             Some(os)
         };
         Ok((e_content_type, e_content))

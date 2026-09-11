@@ -36,8 +36,8 @@ pub mod error;
 pub mod lexer;
 pub mod parser;
 
-pub use error::{CompilerError, Result};
 pub use ast::Schema;
+pub use error::{CompilerError, Result};
 
 /// Parse `.tpt-asn1` source into a [`Schema`] AST.
 pub fn parse(src: &str) -> core::result::Result<Schema, CompilerError> {

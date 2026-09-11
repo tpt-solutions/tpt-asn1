@@ -32,13 +32,7 @@ impl<'a> Attribute<'a> {
     /// Iterate the raw TLVs of each value in the `SET OF`.
     pub fn value_tlvs(&self) -> impl Iterator<Item = Any<'a>> {
         let mut r = Reader::new(self.values, tpt_asn1_core::reader::Config::ber());
-        core::iter::from_fn(move || {
-            if r.is_empty() {
-                None
-            } else {
-                Any::decode(&mut r).ok()
-            }
-        })
+        core::iter::from_fn(move || if r.is_empty() { None } else { Any::decode(&mut r).ok() })
     }
 
     /// Return the first value as an `Any`, if present.
@@ -69,5 +63,3 @@ pub fn decode_attribute_set<'a>(content: &'a [u8]) -> Result<alloc::vec::Vec<Att
     }
     Ok(attrs)
 }
-
-

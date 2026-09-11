@@ -1,18 +1,18 @@
-﻿//! Internal DER re-encode round-trip checks — a stand-in for the OpenSSL
+//! Internal DER re-encode round-trip checks — a stand-in for the OpenSSL
 //! byte-for-byte parity gate (which requires an external `openssl` binary not
 //! present here). These confirm that encode -> decode -> encode is byte-stable
 //! for canonical DER, which is the property parity testing relies on.
 
-use tpt_asn1_core::{decode, Decode, Encode};
+use tpt_asn1_core::decode::{read_sequence, read_set};
+use tpt_asn1_core::reader::{Config, Reader};
+use tpt_asn1_core::tag::Tag;
 use tpt_asn1_core::types::{
-    Integer, OctetString, Boolean, BitString, Null, ObjectIdentifier, Utf8String,
-    PrintableString, Ia5String, UtcTime, GeneralizedTime, BmpString,
+    BitString, BmpString, Boolean, GeneralizedTime, Ia5String, Integer, Null, ObjectIdentifier,
+    OctetString, PrintableString, UtcTime, Utf8String,
 };
 use tpt_asn1_core::writer::encode_to_vec;
-use tpt_asn1_core::reader::{Reader, Config};
-use tpt_asn1_core::decode::{read_sequence, read_set};
 use tpt_asn1_core::writer::Writer;
-use tpt_asn1_core::tag::Tag;
+use tpt_asn1_core::{decode, Decode, Encode};
 
 #[test]
 fn primitive_der_roundtrip_is_stable() {
@@ -130,12 +130,14 @@ fn oid_arc_overflow_is_safe() {
 fn constructed_der_roundtrip_is_stable() {
     // Test SEQUENCE round-trip
     let mut writer = Writer::new_vec();
-    writer.nested(Tag::universal_constructed(Tag::SEQUENCE), |w| {
-        Integer(&[0x01]).encode(w).unwrap();
-        OctetString(b"test").encode(w).unwrap();
-        Boolean(true).encode(w).unwrap();
-        Ok(())
-    }).unwrap();
+    writer
+        .nested(Tag::universal_constructed(Tag::SEQUENCE), |w| {
+            Integer(&[0x01]).encode(w).unwrap();
+            OctetString(b"test").encode(w).unwrap();
+            Boolean(true).encode(w).unwrap();
+            Ok(())
+        })
+        .unwrap();
     let seq_bytes = writer.into_vec();
 
     let mut reader = Reader::new(&seq_bytes, Config::der());
@@ -144,26 +146,31 @@ fn constructed_der_roundtrip_is_stable() {
         let o = OctetString::decode(r)?;
         let b = Boolean::decode(r)?;
         Ok((i, o, b))
-    }).unwrap();
+    })
+    .unwrap();
 
     let mut writer2 = Writer::new_vec();
-    writer2.nested(Tag::universal_constructed(Tag::SEQUENCE), |w| {
-        decoded_seq.0.encode(w).unwrap();
-        decoded_seq.1.encode(w).unwrap();
-        decoded_seq.2.encode(w).unwrap();
-        Ok(())
-    }).unwrap();
+    writer2
+        .nested(Tag::universal_constructed(Tag::SEQUENCE), |w| {
+            decoded_seq.0.encode(w).unwrap();
+            decoded_seq.1.encode(w).unwrap();
+            decoded_seq.2.encode(w).unwrap();
+            Ok(())
+        })
+        .unwrap();
     let re_seq = writer2.into_vec();
     assert_eq!(seq_bytes, re_seq);
 
     // Test SET round-trip (order should be preserved in DER)
     let mut writer3 = Writer::new_vec();
-    writer3.nested(Tag::universal_constructed(Tag::SET), |w| {
-        Integer(&[0x01]).encode(w).unwrap();
-        Integer(&[0x02]).encode(w).unwrap();
-        Integer(&[0x03]).encode(w).unwrap();
-        Ok(())
-    }).unwrap();
+    writer3
+        .nested(Tag::universal_constructed(Tag::SET), |w| {
+            Integer(&[0x01]).encode(w).unwrap();
+            Integer(&[0x02]).encode(w).unwrap();
+            Integer(&[0x03]).encode(w).unwrap();
+            Ok(())
+        })
+        .unwrap();
     let set_bytes = writer3.into_vec();
 
     let mut reader2 = Reader::new(&set_bytes, Config::der());
@@ -172,15 +179,18 @@ fn constructed_der_roundtrip_is_stable() {
         let i2 = Integer::decode(r)?;
         let i3 = Integer::decode(r)?;
         Ok((i1, i2, i3))
-    }).unwrap();
+    })
+    .unwrap();
 
     let mut writer4 = Writer::new_vec();
-    writer4.nested(Tag::universal_constructed(Tag::SET), |w| {
-        decoded_set.0.encode(w).unwrap();
-        decoded_set.1.encode(w).unwrap();
-        decoded_set.2.encode(w).unwrap();
-        Ok(())
-    }).unwrap();
+    writer4
+        .nested(Tag::universal_constructed(Tag::SET), |w| {
+            decoded_set.0.encode(w).unwrap();
+            decoded_set.1.encode(w).unwrap();
+            decoded_set.2.encode(w).unwrap();
+            Ok(())
+        })
+        .unwrap();
     let re_set = writer4.into_vec();
     assert_eq!(set_bytes, re_set);
 }

@@ -109,7 +109,10 @@ fn parse_spki(spki: &[u8]) -> Result<(&[u8], &[u8])> {
     if !atag.is_universal(Tag::SEQUENCE) {
         return Err(Error::UnexpectedStructure);
     }
-    let alg = ObjectIdentifier::decode(&mut Reader::new(alg_inner, tpt_asn1_core::reader::Config::der()))?;
+    let alg = ObjectIdentifier::decode(&mut Reader::new(
+        alg_inner,
+        tpt_asn1_core::reader::Config::der(),
+    ))?;
     let key = BitString::decode(&mut r2)?;
     Ok((alg.0, key.data))
 }

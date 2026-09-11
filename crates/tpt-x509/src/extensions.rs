@@ -101,93 +101,67 @@ impl<'a> Extensions<'a> {
 
     /// Decode the [`BasicConstraints`] extension, if present.
     pub fn basic_constraints(&self) -> Result<Option<BasicConstraints>> {
-        self.find(oid::ext::BASIC_CONSTRAINTS)
-            .map(|e| e.decode_value())
-            .transpose()
+        self.find(oid::ext::BASIC_CONSTRAINTS).map(|e| e.decode_value()).transpose()
     }
 
     /// Decode the [`KeyUsage`] extension, if present.
     pub fn key_usage(&self) -> Result<Option<KeyUsage<'a>>> {
-        self.find(oid::ext::KEY_USAGE)
-            .map(|e| e.decode_value())
-            .transpose()
+        self.find(oid::ext::KEY_USAGE).map(|e| e.decode_value()).transpose()
     }
 
     /// Decode the [`ExtendedKeyUsage`] extension, if present.
     pub fn extended_key_usage(&self) -> Result<Option<ExtendedKeyUsage<'a>>> {
-        self.find(oid::ext::EXT_KEY_USAGE)
-            .map(|e| e.decode_value())
-            .transpose()
+        self.find(oid::ext::EXT_KEY_USAGE).map(|e| e.decode_value()).transpose()
     }
 
     /// Decode the [`subject_alt_name`](Self::subject_alt_name), if present.
     pub fn subject_alt_name(&self) -> Result<Option<GeneralNames<'a>>> {
-        self.find(oid::ext::SUBJECT_ALT_NAME)
-            .map(|e| e.decode_value())
-            .transpose()
+        self.find(oid::ext::SUBJECT_ALT_NAME).map(|e| e.decode_value()).transpose()
     }
 
     /// Decode the [`issuer_alt_name`](Self::issuer_alt_name), if present.
     pub fn issuer_alt_name(&self) -> Result<Option<GeneralNames<'a>>> {
-        self.find(oid::ext::ISSUER_ALT_NAME)
-            .map(|e| e.decode_value())
-            .transpose()
+        self.find(oid::ext::ISSUER_ALT_NAME).map(|e| e.decode_value()).transpose()
     }
 
     /// Decode the [`SubjectKeyIdentifier`], if present.
     pub fn subject_key_identifier(&self) -> Result<Option<SubjectKeyIdentifier<'a>>> {
-        self.find(oid::ext::SUBJECT_KEY_IDENTIFIER)
-            .map(|e| e.decode_value())
-            .transpose()
+        self.find(oid::ext::SUBJECT_KEY_IDENTIFIER).map(|e| e.decode_value()).transpose()
     }
 
     /// Decode the [`AuthorityKeyIdentifier`], if present.
     pub fn authority_key_identifier(&self) -> Result<Option<AuthorityKeyIdentifier<'a>>> {
-        self.find(oid::ext::AUTHORITY_KEY_IDENTIFIER)
-            .map(|e| e.decode_value())
-            .transpose()
+        self.find(oid::ext::AUTHORITY_KEY_IDENTIFIER).map(|e| e.decode_value()).transpose()
     }
 
     /// Decode the [`CrlDistributionPoints`], if present.
     pub fn crl_distribution_points(&self) -> Result<Option<CrlDistributionPoints<'a>>> {
-        self.find(oid::ext::CRL_DISTRIBUTION_POINTS)
-            .map(|e| e.decode_value())
-            .transpose()
+        self.find(oid::ext::CRL_DISTRIBUTION_POINTS).map(|e| e.decode_value()).transpose()
     }
 
     /// Decode the [`AuthorityInfoAccess`], if present.
     pub fn authority_info_access(&self) -> Result<Option<AuthorityInfoAccess<'a>>> {
-        self.find(oid::ext::AUTHORITY_INFO_ACCESS)
-            .map(|e| e.decode_value())
-            .transpose()
+        self.find(oid::ext::AUTHORITY_INFO_ACCESS).map(|e| e.decode_value()).transpose()
     }
 
     /// Decode the [`CertificatePolicies`], if present.
     pub fn certificate_policies(&self) -> Result<Option<CertificatePolicies<'a>>> {
-        self.find(oid::ext::CERTIFICATE_POLICIES)
-            .map(|e| e.decode_value())
-            .transpose()
+        self.find(oid::ext::CERTIFICATE_POLICIES).map(|e| e.decode_value()).transpose()
     }
 
     /// Decode the [`NameConstraints`], if present.
     pub fn name_constraints(&self) -> Result<Option<NameConstraints<'a>>> {
-        self.find(oid::ext::NAME_CONSTRAINTS)
-            .map(|e| e.decode_value())
-            .transpose()
+        self.find(oid::ext::NAME_CONSTRAINTS).map(|e| e.decode_value()).transpose()
     }
 
     /// Decode the [`PolicyConstraints`], if present.
     pub fn policy_constraints(&self) -> Result<Option<PolicyConstraints>> {
-        self.find(oid::ext::POLICY_CONSTRAINTS)
-            .map(|e| e.decode_value())
-            .transpose()
+        self.find(oid::ext::POLICY_CONSTRAINTS).map(|e| e.decode_value()).transpose()
     }
 
     /// Decode the [`InhibitAnyPolicy`], if present.
     pub fn inhibit_any_policy(&self) -> Result<Option<InhibitAnyPolicy>> {
-        self.find(oid::ext::INHIBIT_ANY_POLICY)
-            .map(|e| e.decode_value())
-            .transpose()
+        self.find(oid::ext::INHIBIT_ANY_POLICY).map(|e| e.decode_value()).transpose()
     }
 }
 
@@ -255,9 +229,7 @@ pub struct BasicConstraints {
 impl<'a> Decode<'a> for BasicConstraints {
     fn decode(r: &mut Reader<'a>) -> Result<Self> {
         read_sequence(r, |inner| {
-            let ca = if !inner.is_empty()
-                && inner.peek_tag() == Ok(Tag::universal(Tag::BOOLEAN))
-            {
+            let ca = if !inner.is_empty() && inner.peek_tag() == Ok(Tag::universal(Tag::BOOLEAN)) {
                 Boolean::decode(inner)?.0
             } else {
                 false
@@ -537,10 +509,7 @@ pub struct DistributionPoint<'a> {
 impl<'a> DistributionPoint<'a> {
     /// The distribution-point URIs (from `fullName`), if any.
     pub fn uris(&self) -> impl Iterator<Item = &'a [u8]> + '_ {
-        self.full_name
-            .iter()
-            .flat_map(|g| g.names.iter())
-            .filter_map(|n| n.uri())
+        self.full_name.iter().flat_map(|g| g.names.iter()).filter_map(|n| n.uri())
     }
 }
 
@@ -747,7 +716,10 @@ impl<'a> Decode<'a> for NameConstraints<'a> {
     }
 }
 
-fn decode_subtrees(content: &[u8], config: crate::reader::Config) -> Result<Vec<GeneralSubtree<'_>>> {
+fn decode_subtrees(
+    content: &[u8],
+    config: crate::reader::Config,
+) -> Result<Vec<GeneralSubtree<'_>>> {
     let mut r = Reader::new(content, config);
     let mut out = Vec::new();
     while !r.is_empty() {

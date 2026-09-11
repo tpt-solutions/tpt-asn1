@@ -131,7 +131,8 @@ impl<'a> Reader<'a> {
 
     /// Peek the next [`Tag`] without consuming any input.
     pub fn peek_tag(&self) -> Result<Tag> {
-        let mut tmp = Reader { input: self.input, pos: self.pos, config: self.config, depth: self.depth };
+        let mut tmp =
+            Reader { input: self.input, pos: self.pos, config: self.config, depth: self.depth };
         Tag::decode(&mut tmp)
     }
 

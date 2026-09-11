@@ -42,10 +42,7 @@ fn inspect_json_contains_fields() {
     let out = bin().arg("inspect").arg(&path).arg("--json").output().unwrap();
     let stdout = String::from_utf8(out.stdout).unwrap();
     assert!(stdout.contains("\"tag\":\"INTEGER\""), "json missing INTEGER tag:\n{stdout}");
-    assert!(
-        stdout.contains("\"summary\":\"5 (05)\""),
-        "json missing INTEGER summary:\n{stdout}"
-    );
+    assert!(stdout.contains("\"summary\":\"5 (05)\""), "json missing INTEGER summary:\n{stdout}");
     assert!(stdout.contains("\"tag\":\"SEQUENCE\""), "json missing SEQUENCE tag:\n{stdout}");
     std::fs::remove_file(&path).ok();
 }
@@ -69,17 +66,9 @@ fn inspect_try_der_unwraps_embedded() {
     // OCTET STRING wrapping INTEGER 7.
     let embedded = [0x04u8, 0x03, 0x02, 0x01, 0x07];
     let path = write_temp("tryder", &embedded);
-    let out = bin()
-        .arg("inspect")
-        .arg(&path)
-        .arg("--try-der")
-        .output()
-        .unwrap();
+    let out = bin().arg("inspect").arg(&path).arg("--try-der").output().unwrap();
     let stdout = String::from_utf8(out.stdout).unwrap();
-    assert!(
-        stdout.contains("embedded DER"),
-        "expected embedded DER unwrap, got:\n{stdout}"
-    );
+    assert!(stdout.contains("embedded DER"), "expected embedded DER unwrap, got:\n{stdout}");
     assert!(stdout.contains("INTEGER"), "embedded INTEGER not shown:\n{stdout}");
     std::fs::remove_file(&path).ok();
 }
@@ -128,11 +117,7 @@ fn base64_encode(input: &[u8]) -> String {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::new();
     for chunk in input.chunks(3) {
-        let b = [
-            chunk[0],
-            *chunk.get(1).unwrap_or(&0),
-            *chunk.get(2).unwrap_or(&0),
-        ];
+        let b = [chunk[0], *chunk.get(1).unwrap_or(&0), *chunk.get(2).unwrap_or(&0)];
         let n = ((b[0] as u32) << 16) | ((b[1] as u32) << 8) | (b[2] as u32);
         out.push(TABLE[((n >> 18) & 0x3f) as usize] as char);
         out.push(TABLE[((n >> 12) & 0x3f) as usize] as char);

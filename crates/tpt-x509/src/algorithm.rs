@@ -90,19 +90,13 @@ impl<'a> Decode<'a> for AlgorithmIdentifier<'a> {
     fn decode(r: &mut Reader<'a>) -> CoreResult<Self> {
         read_sequence(r, |inner| {
             let algorithm = ObjectIdentifier::decode(inner)?;
-            let parameters = if inner.is_empty() {
-                None
-            } else {
-                Some(Any::decode(inner)?)
-            };
+            let parameters = if inner.is_empty() { None } else { Some(Any::decode(inner)?) };
             Ok(AlgorithmIdentifier { algorithm, parameters })
         })
     }
 }
 
 /// Decode an `AlgorithmIdentifier` from a complete DER `SEQUENCE`.
-pub fn decode_algorithm_identifier(
-    bytes: &[u8],
-) -> CoreResult<AlgorithmIdentifier<'_>> {
+pub fn decode_algorithm_identifier(bytes: &[u8]) -> CoreResult<AlgorithmIdentifier<'_>> {
     crate::decode::<AlgorithmIdentifier<'_>>(bytes)
 }

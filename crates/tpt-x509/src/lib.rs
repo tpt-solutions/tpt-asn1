@@ -40,25 +40,25 @@ pub use tpt_asn1_core::{any, decode, error, length, reader, tag, types, util, wr
 
 // --- no_std-compatible, always-available modules ---------------------------------
 
-pub mod oid;
 pub mod algorithm;
+pub mod oid;
 pub mod spki;
 pub mod time;
 
 // --- alloc-gated modules --------------------------------------------------------
 
 #[cfg(feature = "alloc")]
-pub mod name;
-#[cfg(feature = "alloc")]
-pub mod extensions;
-#[cfg(feature = "alloc")]
 pub mod certificate;
+#[cfg(feature = "alloc")]
+pub mod chain;
 #[cfg(feature = "alloc")]
 pub mod crl;
 #[cfg(feature = "alloc")]
-pub mod ocsp;
+pub mod extensions;
 #[cfg(feature = "alloc")]
-pub mod chain;
+pub mod name;
+#[cfg(feature = "alloc")]
+pub mod ocsp;
 
 /// Pluggable cryptographic backend used for signature verification (Phase 4
 /// item 75). `tpt-cms` reuses this same trait for CMS signature verification.

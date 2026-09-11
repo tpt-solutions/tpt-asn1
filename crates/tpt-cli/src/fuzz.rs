@@ -41,17 +41,15 @@ pub fn run(inputs: &[PathBuf], opts: FuzzOptions) -> Result<bool, CliError> {
     let openssl_present = openssl_available();
     if !openssl_present {
         if opts.require_openssl {
-            return Err(CliError::msg("fuzz: OpenSSL (`openssl`) not found on PATH; --require-openssl set"));
+            return Err(CliError::msg(
+                "fuzz: OpenSSL (`openssl`) not found on PATH; --require-openssl set",
+            ));
         }
         eprintln!("tpt-asn1: warning: OpenSSL not found; comparing against our own parser only.");
     }
 
-    let inspect_opts = InspectOptions {
-        config: opts.config,
-        max_depth: 64,
-        try_der: true,
-        show_bytes: false,
-    };
+    let inspect_opts =
+        InspectOptions { config: opts.config, max_depth: 64, try_der: true, show_bytes: false };
 
     let mut findings: Vec<Finding> = Vec::new();
     let mut checked = 0usize;
@@ -64,7 +62,10 @@ pub fn run(inputs: &[PathBuf], opts: FuzzOptions) -> Result<bool, CliError> {
                     match crate::pem::decode_pem(&bytes) {
                         Ok(blocks) => blocks.into_iter().map(|b| b.der).collect(),
                         Err(e) => {
-                            findings.push(Finding { path: path.clone(), detail: format!("pem decode: {e}") });
+                            findings.push(Finding {
+                                path: path.clone(),
+                                detail: format!("pem decode: {e}"),
+                            });
                             continue;
                         }
                     }
@@ -105,10 +106,7 @@ pub fn run(inputs: &[PathBuf], opts: FuzzOptions) -> Result<bool, CliError> {
         }
     }
 
-    println!(
-        "tpt-asn1 fuzz: checked {checked} DER inputs across {} files.",
-        files.len()
-    );
+    println!("tpt-asn1 fuzz: checked {checked} DER inputs across {} files.", files.len());
     if findings.is_empty() {
         println!("tpt-asn1 fuzz: no differential findings.");
         Ok(true)
@@ -127,9 +125,8 @@ fn collect_files(path: &Path, out: &mut Vec<PathBuf>) -> Result<(), CliError> {
     if meta.is_file() {
         out.push(path.to_path_buf());
     } else if meta.is_dir() {
-        let mut entries: Vec<_> = std::fs::read_dir(path)?
-            .filter_map(|e| e.ok().map(|e| e.path()))
-            .collect();
+        let mut entries: Vec<_> =
+            std::fs::read_dir(path)?.filter_map(|e| e.ok().map(|e| e.path())).collect();
         entries.sort();
         for e in entries {
             collect_files(&e, out)?;
@@ -175,11 +172,7 @@ fn openssl_check(der: &[u8]) -> Option<OpensslResult> {
     match out {
         Ok(o) => {
             let accepted = o.status.success();
-            let elems = if accepted {
-                count_openssl_elems(&o.stdout)
-            } else {
-                0
-            };
+            let elems = if accepted { count_openssl_elems(&o.stdout) } else { 0 };
             Some(OpensslResult { accepted, elems })
         }
         Err(_) => None,
@@ -193,7 +186,7 @@ fn count_openssl_elems(stdout: &[u8]) -> usize {
         .filter(|l| {
             let t = l.trim_start();
             let first = t.chars().next();
-            first.map_or(false, |c| c.is_ascii_digit()) && l.contains(':')
+            first.is_some_and(|c| c.is_ascii_digit()) && l.contains(':')
         })
         .count()
 }

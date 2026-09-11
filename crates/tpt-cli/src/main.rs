@@ -333,10 +333,7 @@ fn cmd_fuzz(a: FuzzArgs) -> Result<i32, CliError> {
     }
     let all_ok = fuzz::run(
         &a.inputs,
-        fuzz::FuzzOptions {
-            config: a.rule.config(),
-            require_openssl: a.require_openssl,
-        },
+        fuzz::FuzzOptions { config: a.rule.config(), require_openssl: a.require_openssl },
     )?;
     Ok(if all_ok { 0 } else { 1 })
 }

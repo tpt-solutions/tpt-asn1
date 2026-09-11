@@ -34,12 +34,12 @@ pub mod algorithm;
 pub mod attributes;
 pub mod cert;
 pub mod content_info;
+pub mod enveloped_data;
 pub mod error;
 pub mod oid;
 pub mod recipient_info;
-pub mod signer_info;
 pub mod signed_data;
-pub mod enveloped_data;
+pub mod signer_info;
 pub mod verify;
 
 #[cfg(feature = "alloc")]

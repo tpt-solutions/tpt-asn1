@@ -10,7 +10,7 @@
 
 use crate::error::Result;
 use tpt_asn1_core::any::Any;
-use tpt_asn1_core::decode::{Decode, read_sequence};
+use tpt_asn1_core::decode::{read_sequence, Decode};
 use tpt_asn1_core::reader::Reader;
 use tpt_asn1_core::types::ObjectIdentifier;
 

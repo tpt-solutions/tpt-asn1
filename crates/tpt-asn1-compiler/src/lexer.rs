@@ -142,7 +142,8 @@ fn lex_ident(bytes: &[u8], mut i: usize, toks: &mut Vec<Token>) -> Result<usize>
             break;
         }
     }
-    let s = core::str::from_utf8(&bytes[start..i]).map_err(|_| CompilerError::lex("invalid identifier"))?;
+    let s = core::str::from_utf8(&bytes[start..i])
+        .map_err(|_| CompilerError::lex("invalid identifier"))?;
     toks.push(Token::Ident(s.to_string()));
     Ok(i)
 }

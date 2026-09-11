@@ -42,9 +42,7 @@ fn check_schema(schema: &Schema) -> Result<()> {
     for ta in &schema.types {
         match &ta.def {
             TypeDef::Alias(ty) => check_alias_chain(&ta.name, ty, &schema.types, &mut Vec::new())?,
-            TypeDef::Sequence(fields)
-            | TypeDef::Set(fields)
-            | TypeDef::Choice(fields) => {
+            TypeDef::Sequence(fields) | TypeDef::Set(fields) | TypeDef::Choice(fields) => {
                 for f in fields {
                     check_type_refs(&f.ty, &schema.types)?;
                 }
@@ -55,23 +53,27 @@ fn check_schema(schema: &Schema) -> Result<()> {
     Ok(())
 }
 
-fn check_alias_chain(name: &str, ty: &Type, types: &[TypeAssignment], seen: &mut Vec<String>) -> Result<()> {
+fn check_alias_chain(
+    name: &str,
+    ty: &Type,
+    types: &[TypeAssignment],
+    seen: &mut Vec<String>,
+) -> Result<()> {
     match ty {
         Type::Named(n) => {
             if seen.contains(n) || n == name {
-                return Err(CompilerError::codegen(format!(
-                    "cyclic alias involving `{n}`"
-                )));
+                return Err(CompilerError::codegen(format!("cyclic alias involving `{n}`")));
             }
-            let def = lookup(n, types).ok_or_else(|| {
-                CompilerError::codegen(format!("undefined type reference `{n}`"))
-            })?;
+            let def = lookup(n, types)
+                .ok_or_else(|| CompilerError::codegen(format!("undefined type reference `{n}`")))?;
             if let TypeDef::Alias(next) = def {
                 seen.push(n.clone());
                 check_alias_chain(n, next, types, seen)?;
             }
         }
-        Type::SequenceOf(inner) | Type::SetOf(inner) => check_alias_chain(name, inner, types, seen)?,
+        Type::SequenceOf(inner) | Type::SetOf(inner) => {
+            check_alias_chain(name, inner, types, seen)?
+        }
         _ => {}
     }
     Ok(())
@@ -81,9 +83,7 @@ fn check_type_refs(ty: &Type, types: &[TypeAssignment]) -> Result<()> {
     match ty {
         Type::Named(n) => {
             if lookup(n, types).is_none() {
-                return Err(CompilerError::codegen(format!(
-                    "undefined type reference `{n}`"
-                )));
+                return Err(CompilerError::codegen(format!("undefined type reference `{n}`")));
             }
         }
         Type::SequenceOf(inner) | Type::SetOf(inner) => check_type_refs(inner, types)?,
@@ -288,8 +288,8 @@ fn to_snake(name: &str) -> String {
 const RESERVED_IDENTIFIERS: &[&str] = &[
     "abstract", "as", "async", "await", "become", "box", "break", "const", "continue", "crate",
     "do", "dyn", "else", "enum", "extern", "false", "final", "fn", "for", "gen", "if", "impl",
-    "in", "let", "loop", "macro", "match", "mod", "move", "mut", "override", "priv", "pub",
-    "ref", "return", "self", "Self", "static", "struct", "super", "trait", "true", "try", "type",
+    "in", "let", "loop", "macro", "match", "mod", "move", "mut", "override", "priv", "pub", "ref",
+    "return", "self", "Self", "static", "struct", "super", "trait", "true", "try", "type",
     "typeof", "union", "unsafe", "unsized", "use", "virtual", "where", "while", "yield",
 ];
 
@@ -350,11 +350,7 @@ fn tag_expr_for_spec(spec: &TagSpec, ty: &Type, types: &[TypeAssignment]) -> Str
         TagClass::Context => "Context",
         TagClass::Private => "Private",
     };
-    let constructed = if spec.explicit {
-        true
-    } else {
-        is_constructed(ty, types)
-    };
+    let constructed = if spec.explicit { true } else { is_constructed(ty, types) };
     format!("Tag::new(Class::{cls}, {constructed}, {})", spec.number)
 }
 
@@ -402,18 +398,16 @@ fn generate_type(name: &str, def: &TypeDef, types: &[TypeAssignment]) -> Result<
         TypeDef::Set(fields) => {
             generate_struct(&rust_name, lifetime, lifetime_param, fields, types, true)
         }
-        TypeDef::Choice(fields) => generate_choice(&rust_name, lifetime, lifetime_param, fields, types),
+        TypeDef::Choice(fields) => {
+            generate_choice(&rust_name, lifetime, lifetime_param, fields, types)
+        }
         TypeDef::Alias(ty) => {
             let inner = rust_type(ty, types);
             if let Some((_elem, kind)) = seqof_inner(ty, types) {
                 // A `SEQUENCE OF`/`SET OF` collapse to `Vec`, which cannot gain
                 // trait impls (E0117: external type), so collection aliases are
                 // compiled to newtype structs with generated `Decode`/`Encode`.
-                let reader_call = if kind == "SET" {
-                    "read_set_of"
-                } else {
-                    "read_sequence_of"
-                };
+                let reader_call = if kind == "SET" { "read_set_of" } else { "read_sequence_of" };
                 let mut out = format!(
                     "#[derive(Clone, Debug, PartialEq, Eq)]\npub struct {rust_name}{lifetime_param}(pub {inner});\n\n"
                 );
@@ -495,9 +489,7 @@ fn generate_struct(
     };
 
     let mut out = String::new();
-    let is_copy = fields
-        .iter()
-        .all(|f| type_is_copy(&f.ty, types, &mut Vec::new()));
+    let is_copy = fields.iter().all(|f| type_is_copy(&f.ty, types, &mut Vec::new()));
     if is_copy {
         out.push_str("#[derive(Clone, Copy, Debug, PartialEq, Eq)]\n");
     } else {
@@ -523,7 +515,8 @@ fn generate_struct(
         let is_opt = f.optional || f.default.is_some();
         let base = rust_type(&f.ty, types);
         let decode_call = decode_via_any(f, types)?;
-        let match_expr = if resolve_choice(f, types).is_some() && matches!(f.tagging, Tagging::None) {
+        let match_expr = if resolve_choice(f, types).is_some() && matches!(f.tagging, Tagging::None)
+        {
             let choice_name = resolve_choice(f, types).unwrap();
             format!("{choice_name}::is_alternative_tag(__a.tag)")
         } else {
@@ -629,9 +622,7 @@ fn decode_via_any(field: &Field, types: &[TypeAssignment]) -> Result<String> {
                     Ok("read_sequence_of_content(&mut Reader::new(__a.value, __cfg))?".to_string())
                 }
             } else {
-                Ok(format!(
-                    "<{base}>::decode_content(&mut Reader::new(__a.value, __cfg))?"
-                ))
+                Ok(format!("<{base}>::decode_content(&mut Reader::new(__a.value, __cfg))?"))
             }
         }
     }
@@ -729,9 +720,7 @@ fn generate_choice(
             ));
         }
     }
-    let is_copy = fields
-        .iter()
-        .all(|f| type_is_copy(&f.ty, types, &mut Vec::new()));
+    let is_copy = fields.iter().all(|f| type_is_copy(&f.ty, types, &mut Vec::new()));
     if is_copy {
         out.push_str("#[derive(Clone, Copy, Debug, PartialEq, Eq)]\n");
     } else {

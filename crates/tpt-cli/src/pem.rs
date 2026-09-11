@@ -62,11 +62,7 @@ pub fn decode_pem(bytes: &[u8]) -> Result<Vec<PemBlock>, String> {
     while i < lines.len() {
         let line = lines[i];
         if let Some(rest) = line.strip_prefix("-----BEGIN ") {
-            let label = rest
-                .strip_suffix("-----")
-                .unwrap_or(rest)
-                .trim()
-                .to_string();
+            let label = rest.strip_suffix("-----").unwrap_or(rest).trim().to_string();
             let mut body = String::new();
             i += 1;
             while i < lines.len() && !lines[i].starts_with("-----END ") {

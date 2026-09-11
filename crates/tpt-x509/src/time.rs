@@ -85,10 +85,7 @@ impl<'a> Decode<'a> for Time<'a> {
         } else if any.tag.is_universal(Tag::GENERALIZED_TIME) {
             Ok(Time { inner: TimeInner::General(GeneralizedTime(any.value)) })
         } else {
-            Err(Error::UnexpectedTag {
-                expected: Tag::universal(Tag::UTC_TIME),
-                actual: any.tag,
-            })
+            Err(Error::UnexpectedTag { expected: Tag::universal(Tag::UTC_TIME), actual: any.tag })
         }
     }
 }
@@ -139,10 +136,8 @@ fn to_unix_seconds(dt: &DateTime) -> Result<i64> {
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy; // [0, 146096]
     let days = era * 146097 + doe - 719468;
 
-    let secs = days * 86_400
-        + (dt.hour as i64) * 3600
-        + (dt.minute as i64) * 60
-        + (dt.second as i64);
+    let secs =
+        days * 86_400 + (dt.hour as i64) * 3600 + (dt.minute as i64) * 60 + (dt.second as i64);
 
     let offset = dt.tz_offset_minutes.unwrap_or(0) as i64 * 60;
     secs.checked_sub(offset).ok_or(Error::BadTime)

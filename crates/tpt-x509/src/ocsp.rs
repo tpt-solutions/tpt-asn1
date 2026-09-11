@@ -18,8 +18,8 @@ use tpt_asn1_core::tag::Tag;
 use tpt_asn1_core::types::{Integer, OctetString};
 
 use crate::algorithm::AlgorithmIdentifier;
-use crate::time::Time;
 use crate::oid;
+use crate::time::Time;
 
 /// An OCSP `CertID` — identifies a cert by issuer name/key hashes + serial.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -139,9 +139,12 @@ impl<'a> Decode<'a> for CertStatus<'a> {
             let mut sub = Reader::new(any.value, *r.config());
             let revocation_time = Time::decode(&mut sub)?;
             let reason = if !sub.is_empty() {
-                Some(Integer::decode(&mut sub)?.as_u64().ok_or(
-                    tpt_asn1_core::error::Error::Custom("revocation reason too large"),
-                )? as u8)
+                Some(
+                    Integer::decode(&mut sub)?
+                        .as_u64()
+                        .ok_or(tpt_asn1_core::error::Error::Custom("revocation reason too large"))?
+                        as u8,
+                )
             } else {
                 None
             };
@@ -264,12 +267,10 @@ impl<'a> Decode<'a> for OcspResponse<'a> {
         read_sequence(r, |inner| {
             let status = tpt_asn1_core::types::Enumerated::decode(inner)?
                 .as_i64()
-                .ok_or(tpt_asn1_core::error::Error::Custom("bad OCSP status"))? as u8;
-            let response_bytes = if inner.is_empty() {
-                None
-            } else {
-                Some(ResponseBytes::decode(inner)?)
-            };
+                .ok_or(tpt_asn1_core::error::Error::Custom("bad OCSP status"))?
+                as u8;
+            let response_bytes =
+                if inner.is_empty() { None } else { Some(ResponseBytes::decode(inner)?) };
             Ok(OcspResponse { status, response_bytes })
         })
     }
