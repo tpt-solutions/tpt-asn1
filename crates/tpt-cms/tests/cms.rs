@@ -86,8 +86,8 @@ fn mock_digest(data: &[u8]) -> Vec<u8> {
         h = h.wrapping_mul(0x0000_0100_0000_01b3);
     }
     let mut out = vec![0u8; 32];
-    for i in 0..8 {
-        out[i] = (h >> (8 * i)) as u8;
+    for (i, out_i) in out.iter_mut().take(8).enumerate() {
+        *out_i = (h >> (8 * i)) as u8;
     }
     out
 }

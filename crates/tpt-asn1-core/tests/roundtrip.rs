@@ -30,12 +30,12 @@ fn primitive_der_roundtrip_is_stable() {
 
     // BOOLEAN
     let b = encode_to_vec(&Boolean(true)).unwrap();
-    assert_eq!(decode::<Boolean>(&b).unwrap().0, true);
+    assert!(decode::<Boolean>(&b).unwrap().0);
     let re3 = encode_to_vec(&decode::<Boolean>(&b).unwrap()).unwrap();
     assert_eq!(b, re3);
 
     let b_false = encode_to_vec(&Boolean(false)).unwrap();
-    assert_eq!(decode::<Boolean>(&b_false).unwrap().0, false);
+    assert!(!decode::<Boolean>(&b_false).unwrap().0);
     let re4 = encode_to_vec(&decode::<Boolean>(&b_false).unwrap()).unwrap();
     assert_eq!(b_false, re4);
 
@@ -103,6 +103,27 @@ fn primitive_der_roundtrip_is_stable() {
     assert_eq!(decoded_bmp.0, bmp_input);
     let re13 = encode_to_vec(&decoded_bmp).unwrap();
     assert_eq!(bmp, re13);
+}
+
+#[test]
+fn oid_arc_overflow_is_safe() {
+    // A subidentifier longer than 9 base-128 digits cannot fit in u64; both
+    // `matches` and `arcs()` must degrade gracefully instead of overflowing.
+    let overflow = ObjectIdentifier(&[0xff; 10]);
+    assert!(!overflow.matches(&[2, 999, 1, 2, 3]));
+    assert!(overflow.arcs().next().is_none());
+
+    // A 9-digit subidentifier (63 bits) is still representable; the ninth
+    // digit terminates it (0x7f has the high bit clear).
+    let mut nine = [0xffu8; 9];
+    nine[8] = 0x7f;
+    assert_eq!(ObjectIdentifier(&nine).arcs().next(), Some(u64::MAX >> 1));
+
+    // A 10-digit subidentifier cannot fit in u64 and must stop gracefully,
+    // even when its final digit is a clean terminator.
+    let mut ten = [0xffu8; 10];
+    ten[9] = 0x7f;
+    assert!(ObjectIdentifier(&ten).arcs().next().is_none());
 }
 
 #[test]

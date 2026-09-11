@@ -191,7 +191,9 @@ fn decode_high_tag_number(r: &mut Reader<'_>) -> Result<u32> {
         }
         shifted = true;
     }
-    if number < 31 && shifted {
+    if number < 31 && (shifted || r.config().rule == crate::EncodingRule::Der) {
+        // The multi-octet high-tag-number form must only be used for numbers
+        // >= 31; in DER it is prohibited outright for smaller numbers.
         return Err(Error::InvalidTag);
     }
     Ok(number)

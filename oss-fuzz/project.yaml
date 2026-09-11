@@ -1,0 +1,21 @@
+# OSS-Fuzz project definition (not yet registered).
+#
+# This file is the starting point for the upstream OSS-Fuzz submission:
+#   https://github.com/google/oss-fuzz  (new-project-guide)
+#
+# TODO before submitting:
+#   - replace README_FILL_IN with a maintainer email that owns the domain used
+#     for verification (OSS-Fuzz requires verified contact emails), and
+#   - add any secondary contacts to `auto_ccs`.
+#
+# The submission itself is a separate repo (google/oss-fuzz), so this file is
+# kept here as the canonical, reviewed-in-this-repo copy of the config.
+
+homepage: "https://github.com/TPT-Solutions/tpt-asn1"
+main_repo: "https://github.com/TPT-Solutions/tpt-asn1.git"
+language: rust
+primary_contact: "README_FILL_IN@example.com"
+auto_ccs:
+  - "README_FILL_IN@example.com"
+sanitizers:
+  - address

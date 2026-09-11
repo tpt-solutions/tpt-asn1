@@ -178,7 +178,7 @@ fn decode_encap_content_info<'a>(
 }
 
 /// Split a SET OF content into its constituent `Any` elements.
-fn split_any_set<'a>(content: &'a [u8]) -> Result<alloc::vec::Vec<Any<'a>>> {
+fn split_any_set(content: &[u8]) -> Result<alloc::vec::Vec<Any<'_>>> {
     let mut r = Reader::new(content, tpt_asn1_core::reader::Config::ber());
     let mut out = alloc::vec::Vec::new();
     while !r.is_empty() {
@@ -188,7 +188,7 @@ fn split_any_set<'a>(content: &'a [u8]) -> Result<alloc::vec::Vec<Any<'a>>> {
 }
 
 /// Decode a `SET OF SignerInfo` from its raw content bytes.
-fn decode_signer_infos<'a>(content: &'a [u8]) -> Result<alloc::vec::Vec<SignerInfo<'a>>> {
+fn decode_signer_infos(content: &[u8]) -> Result<alloc::vec::Vec<SignerInfo<'_>>> {
     let mut r = Reader::new(content, tpt_asn1_core::reader::Config::der());
     let mut out = alloc::vec::Vec::new();
     while !r.is_empty() {

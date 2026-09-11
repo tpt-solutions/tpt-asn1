@@ -38,9 +38,9 @@ Release model: single v1.0 (phases below are tracking buckets, not separate publ
 - [x] Constant-time byte comparison utility (shared primitive used later by x509/cms)
 - [x] Hand-written DER/BER/CER test vectors covering edge cases (empty sequences, max nesting, boundary lengths, high tag numbers)
 - [ ] Property-based round-trip tests (`encode(decode(x)) == x`) via `proptest` — deferred: pinned toolchain (1.81) cannot build `getrandom 0.4`; deterministic round-trip matrix in place instead
-- [ ] `cargo-fuzz` target: arbitrary bytes must never panic (core parser) — pending Phase 7
+- [x] `cargo-fuzz` target: arbitrary bytes must never panic (core parser) — implemented in Phase 7 (see below): `fuzz/` standalone workspace with 7 libFuzzer targets + validated corpus seeds
 - [x] `#![forbid(unsafe_code)]` on the core parsing path
-- [ ] Rustdoc for all public API, module-level docs explaining the TLV model (set to `warn` pending Phase 8 promotion to `deny`)
+- [x] Rustdoc for all public API, module-level docs explaining the TLV model — promoted straight to `#![deny(missing_docs)]` (see Phase 7 line 121); runs in CI via `-D warnings`
 
 ## Phase 3 — `.tpt-asn1` DSL & `tpt-asn1-compiler` (built alongside core)
 - [x] Design DSL grammar: modules, `SEQUENCE`/`CHOICE`/`SET` types, IMPLICIT/EXPLICIT tagging, OPTIONAL/DEFAULT fields
@@ -110,8 +110,8 @@ Release model: single v1.0 (phases below are tracking buckets, not separate publ
 
 ## Phase 7 — Security Hardening & Compliance Gates
 - [x] Enforce `#![forbid(unsafe_code)]` across all parsing crates via code attribute (cms, x509, core are `no_std` + `forbid(unsafe_code)`); wire into CI `-D warnings` lint (acceptance criteria #3)
-- [ ] Continuous `cargo-fuzz` targets for core, x509, and cms parsers
-- [ ] Apply to OSS-Fuzz for ongoing fuzzing infrastructure
+- [x] Continuous `cargo-fuzz` targets for core, x509, and cms parsers — `fuzz/` standalone workspace: 7 targets (`core_tlv`, `core_universal`, `x509_certificate`, `x509_crl`, `x509_ocsp`, `cms_content_info`, `cms_signed_data`), each with a machine-validated DER/BER/CER corpus seed set; wired into CI as a `fuzz` build+smoke job on push/PR and a `fuzz-soak` scheduled job (3 min/target, crash artifacts uploaded). Note: fuzz binaries need nightly's ASan runtime, so local Windows MSVC link is blocked; Linux CI covers execution.
+- [x] OSS-Fuzz integration files staged (`oss-fuzz/build.sh`, `oss-fuzz/project.yaml`) — actual upstream submission to `google/oss-fuzz` is an external PR; fill in verifiable maintainer emails in `project.yaml` first
 - [x] Constant-time comparison audit: `constant_time_eq` used at all signature/MAC/key-id comparison sites (`verify.rs`, `chain.rs`); remaining call sites to be swept
 - [ ] Formal gate: full NIST PKITS suite passing (acceptance criteria #1) — blocked on acquiring PKITS vectors
 - [ ] Formal gate: 100% of Cisco Umbrella Top 1M parsed without panic (acceptance criteria #2) — blocked on acquiring corpus

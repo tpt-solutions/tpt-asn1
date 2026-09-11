@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+# Cargo-fuzz harness for the tpt-asn1 parsers.
+#
+# This is intentionally a *standalone* workspace (not a member of the root
+# workspace): libfuzzer-sys + the `-Z sanitizer` build flags only work under
+# the nightly toolchain used by cargo-fuzz, so keeping it out of the root
+# workspace preserves the stable / MSRV / `-D warnings` CI matrix.
+#
+# Usage:
+#   cargo +nightly fuzz build
+#   cargo +nightly fuzz run <target> -- -runs=10000
+#   cargo +nightly fuzz run <target> -- -max_total_time=300
+
+[package]
+name = "tpt-asn1-fuzz"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT OR Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+members = ["."]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+tpt-asn1-core = { path = "../crates/tpt-asn1-core" }
+tpt-x509 = { path = "../crates/tpt-x509" }
+tpt-cms = { path = "../crates/tpt-cms" }
+
+[[bin]]
+name = "core_tlv"
+path = "fuzz_targets/core_tlv.rs"
+
+[[bin]]
+name = "core_universal"
+path = "fuzz_targets/core_universal.rs"
+
+[[bin]]
+name = "x509_certificate"
+path = "fuzz_targets/x509_certificate.rs"
+
+[[bin]]
+name = "x509_crl"
+path = "fuzz_targets/x509_crl.rs"
+
+[[bin]]
+name = "x509_ocsp"
+path = "fuzz_targets/x509_ocsp.rs"
+
+[[bin]]
+name = "cms_content_info"
+path = "fuzz_targets/cms_content_info.rs"
+
+[[bin]]
+name = "cms_signed_data"
+path = "fuzz_targets/cms_signed_data.rs"

@@ -180,7 +180,9 @@ pub struct BitString<'a> {
 impl<'a> BitString<'a> {
     /// The usable bits across all octets.
     pub fn bit_len(&self) -> usize {
-        self.data.len() * 8 - self.unused_bits as usize
+        // `from_bytes` rejects a non-zero unused-bit count on an empty data
+        // slice, but stay defensive: never underflow.
+        self.data.len().saturating_mul(8).saturating_sub(self.unused_bits as usize)
     }
 }
 
@@ -200,7 +202,14 @@ impl<'a> BitString<'a> {
             return Err(Error::BadBitString);
         }
         let data = &bytes[1..];
-        if !data.is_empty() && unused_bits != 0 {
+        if data.is_empty() {
+            // A zero-octet BIT STRING has zero bits; there are no "unused"
+            // bits to count. X.690 permits the unused-bits value, but a
+            // non-zero count on no data would corrupt `bit_len`.
+            if unused_bits != 0 {
+                return Err(Error::BadBitString);
+            }
+        } else if unused_bits != 0 {
             let last = data[data.len() - 1];
             if last & ((1u8 << unused_bits) - 1) != 0 {
                 return Err(Error::BadBitString);
@@ -312,6 +321,9 @@ impl<'a> ObjectIdentifier<'a> {
         while pos < bytes.len() {
             let b = bytes[pos];
             pos += 1;
+            if combined > (u64::MAX >> 7) {
+                return false;
+            }
             combined = (combined << 7) | (b & 0x7f) as u64;
             if b & 0x80 == 0 {
                 got = true;
@@ -337,6 +349,9 @@ impl<'a> ObjectIdentifier<'a> {
         while pos < bytes.len() {
             let b = bytes[pos];
             pos += 1;
+            if value > (u64::MAX >> 7) {
+                return false;
+            }
             value = (value << 7) | (b & 0x7f) as u64;
             if b & 0x80 == 0 {
                 if idx >= expected.len() || expected[idx] != value {
@@ -366,6 +381,14 @@ impl<'a> Iterator for OidIter<'a> {
         loop {
             let b = self.remaining[0];
             self.remaining = &self.remaining[1..];
+            if value > (u64::MAX >> 7) {
+                // The subidentifier exceeds u64; skip its remaining base-128
+                // digits (so the cursor stays aligned) and stop iteration.
+                while self.remaining.first().map_or(false, |x| x & 0x80 != 0) {
+                    self.remaining = &self.remaining[1..];
+                }
+                return None;
+            }
             value = (value << 7) | (b & 0x7f) as u64;
             if b & 0x80 == 0 {
                 return Some(value);

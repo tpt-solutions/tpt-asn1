@@ -427,21 +427,37 @@ fn subtree_matches<'a>(st: &GeneralSubtree<'a>, cert: &Certificate<'a>) -> bool 
 
 fn dns_within(child: &[u8], parent: &[u8]) -> bool {
     // child is within parent if it equals parent or ends with "." + parent.
+    // DNS names compare case-insensitively (RFC 1035); a name constraint
+    // naming "example.com" also covers "Example.COM".
     if child.len() < parent.len() {
         return false;
     }
-    if child == parent {
+    if child.eq_ignore_ascii_case(parent) {
         return true;
     }
-    if child.len() == parent.len() + 1 {
+    if child.len() == parent.len() {
         return false;
     }
     let off = child.len() - parent.len();
-    child[off - 1] == b'.' && child[off..] == *parent
+    child[off - 1] == b'.' && child[off..].eq_ignore_ascii_case(parent)
 }
 
 fn ip_within(child: &[u8], parent: &[u8]) -> bool {
-    // Treat as CIDR-style prefix match over the leading bytes of the address.
-    let common = core::cmp::min(child.len(), parent.len());
-    child[..common] == parent[..common]
+    // A name-constraint iPAddress is `[address][mask]` (8 octets for IPv4,
+    // 32 for IPv6, RFC 5280 §4.2.1.10); a SAN iPAddress is the bare address
+    // (4 or 16 octets). Match the address's bits set in the mask. A bare
+    // constraint of the same size as the child is an exact-address match.
+    match (child.len(), parent.len()) {
+        (4, 8) => masked_ip_match(child, &parent[..4], &parent[4..]),
+        (16, 32) => masked_ip_match(child, &parent[..16], &parent[16..]),
+        (n, m) if n == m => child == parent,
+        _ => false,
+    }
+}
+
+fn masked_ip_match(child: &[u8], addr: &[u8], mask: &[u8]) -> bool {
+    child
+        .iter()
+        .zip(addr.iter().zip(mask.iter()))
+        .all(|(c, (a, m))| c & m == a & m)
 }

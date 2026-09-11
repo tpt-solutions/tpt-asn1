@@ -78,11 +78,18 @@ impl Length {
                     return Err(Error::ElementTooLarge);
                 }
                 let mut value: usize = 0;
+                let mut first_octet: Option<u8> = None;
                 for _ in 0..num_bytes {
                     let b = r.read_u8()?;
+                    first_octet.get_or_insert(b);
                     value = (value << 8) | b as usize;
                 }
-                if value < 0x80 && r.config().rule == crate::EncodingRule::Der {
+                // DER requires the shortest possible length encoding: reject
+                // long forms for values < 0x80 and any leading zero octet
+                // (e.g. `82 00 80` must be encoded as `81 80`).
+                if r.config().rule == crate::EncodingRule::Der
+                    && (value < 0x80 || first_octet == Some(0))
+                {
                     return Err(Error::NonMinimalLength);
                 }
                 if value > r.remaining() {

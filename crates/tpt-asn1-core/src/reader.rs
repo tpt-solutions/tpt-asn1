@@ -199,13 +199,11 @@ fn find_eoc_inner(
     while pos < input.len() {
         // End-of-contents terminates an indefinite element at this depth.
         if input[pos] == 0x00 && pos + 1 < input.len() && input[pos + 1] == 0x00 {
-            if depth == 0 {
-                return Ok(pos);
-            }
-            // An EOC at a deeper level belongs to a nested indefinite element;
-            // caller handles those via recursion, so reaching one here is an
-            // unbalanced encoding.
-            return Err(Error::InvalidTag);
+            // Every EOC closes whatever indefinite element this scan started
+            // inside: the top-level scan returns the enclosing element's EOC,
+            // while a recursive descend scan returns the nested element's EOC
+            // so the caller can resume scanning just past it.
+            return Ok(pos);
         }
 
         // Parse tag to discover how many bytes it occupies.

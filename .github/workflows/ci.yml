@@ -4,6 +4,8 @@ on:
   push:
     branches: [master, main]
   pull_request:
+  schedule:
+    - cron: '0 4 * * *'
 
 env:
   CARGO_TERM_COLOR: always
@@ -71,3 +73,61 @@ jobs:
       - uses: rustsec/audit-check@v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  fuzz:
+    name: Fuzz targets (build + smoke)
+    runs-on: ubuntu-latest
+    # The fuzz crate is a standalone workspace; it never builds under the
+    # MSRV/stable matrix. Compilation needs the sanitizer-runtime shipped with
+    # nightly, so this job pins its own toolchain. RUSTFLAGS with "-D warnings"
+    # is disabled here because it also applies to libfuzzer-sys' build script.
+    env:
+      RUSTFLAGS: ""
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Build all fuzz targets
+        run: cargo +nightly fuzz build
+      - name: Smoke-run each fuzz target
+        run: |
+          set -euo pipefail
+          for target in core_tlv core_universal x509_certificate x509_crl x509_ocsp cms_content_info cms_signed_data; do
+            echo "== smoke: $target =="
+            cargo +nightly fuzz run "$target" -- -runs=2000 -max_len=4096
+          done
+
+  fuzz-soak:
+    name: Fuzz soak (nightly)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    env:
+      RUSTFLAGS: ""
+      SOAK_SECONDS: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Soak-run each fuzz target
+        run: |
+          set -u
+          failed=0
+          for target in core_tlv core_universal x509_certificate x509_crl x509_ocsp cms_content_info cms_signed_data; do
+            echo "== soak: $target ($SOAK_SECONDS s) =="
+            if ! cargo +nightly fuzz run "$target" -- -max_total_time="$SOAK_SECONDS" -max_len=16384 -timeout=25; then
+              echo "!! $target reported a finding (see fuzz/artifacts)"
+              failed=1
+            fi
+          done
+          exit "$failed"
+      - name: Upload crashes
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-crashes
+          path: fuzz/artifacts/
+          if-no-files-found: ignore

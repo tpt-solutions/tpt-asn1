@@ -32,7 +32,7 @@ fn build_rs_integration() {
     // Test that we can parse a simple DER encoding of SimpleSequence
     // SimpleSequence { id: 42, name: "test", flag: true }
     // SEQUENCE (universal 16) with 3 elements
-    let der = hex::decode("301a02012a0c04746573740101ff").unwrap();
+    let _der = hex::decode("301a02012a0c04746573740101ff").unwrap();
 
     // We can't easily compile and run the generated code in this test,
     // but we can verify the generated code structure is correct
