@@ -250,7 +250,7 @@ Line references are from a static read of the code and were not confirmed by run
 - [ ] Release automation: release-plz or cargo-release, cargo-dist prebuilt CLI binaries + `cargo binstall` metadata, publish dry-run job
 - [x] `xtask` with `ci`, `pkits`, `docs`, `deny`, `fuzz-quick` (`cargo xtask <cmd>`)
 - [ ] criterion `benches/` (decode cert, walk TLV, chain validate) + a CI regression gate
-- [ ] Re-enable the `proptest` round-trip tests once the toolchain pin is bumped; make fuzz targets assert round-trip / differential properties, not only no-panic
+- [~] Property tests without proptest: `core/tests/properties.rs` (deterministic generator; integers, OIDs, UTF-8). Still open: re-enable proptest once the pin allows it; make fuzz targets assert round-trip / differential properties, not only no-panic
 - [ ] Add `#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]` to library crates
 - [ ] Add negative-case test corpora: BOOLEAN != 0xFF, non-minimal INTEGER, BIT STRING padding, OID edge cases, time edge cases, hostile BER, SAN `otherName`, NameConstraints with min/max, real OCSP responses, CMS negative paths
 
