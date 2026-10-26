@@ -162,12 +162,14 @@ fn constructed_der_roundtrip_is_stable() {
     assert_eq!(seq_bytes, re_seq);
 
     // Test SET round-trip (order should be preserved in DER)
+    // A SET has components with distinct tags, in ascending tag order (X.690 §10.3):
+    // BOOLEAN (1), INTEGER (2), OCTET STRING (4).
     let mut writer3 = Writer::new_vec();
     writer3
         .nested(Tag::universal_constructed(Tag::SET), |w| {
-            Integer(&[0x01]).encode(w).unwrap();
+            Boolean(true).encode(w).unwrap();
             Integer(&[0x02]).encode(w).unwrap();
-            Integer(&[0x03]).encode(w).unwrap();
+            OctetString(b"abc").encode(w).unwrap();
             Ok(())
         })
         .unwrap();
@@ -175,10 +177,10 @@ fn constructed_der_roundtrip_is_stable() {
 
     let mut reader2 = Reader::new(&set_bytes, Config::der());
     let decoded_set = read_set(&mut reader2, |r| {
-        let i1 = Integer::decode(r)?;
-        let i2 = Integer::decode(r)?;
-        let i3 = Integer::decode(r)?;
-        Ok((i1, i2, i3))
+        let b = Boolean::decode(r)?;
+        let i = Integer::decode(r)?;
+        let o = OctetString::decode(r)?;
+        Ok((b, i, o))
     })
     .unwrap();
 

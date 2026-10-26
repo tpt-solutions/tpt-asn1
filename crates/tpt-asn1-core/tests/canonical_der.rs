@@ -57,3 +57,23 @@ fn any_still_decodes_der_element() {
     let bytes = primitive(0x02, &[0x05]);
     assert!(Any::decode(&mut Reader::new(&bytes, Config::der())).is_ok());
 }
+
+#[test]
+fn set_components_must_be_in_tag_order_in_der() {
+    use tpt_asn1_core::decode::read_set;
+    // SET { INTEGER 1, [1] primitive 0x00 } is in order: universal before context.
+    let ordered = [0x31, 0x06, 0x02, 0x01, 0x01, 0x81, 0x01, 0x00];
+    // The same components reversed are not canonical DER.
+    let reversed = [0x31, 0x06, 0x81, 0x01, 0x00, 0x02, 0x01, 0x01];
+    let read = |bytes: &[u8], config: Config| {
+        let mut r = Reader::new(bytes, config);
+        read_set(&mut r, |inner| {
+            Any::decode(inner)?;
+            Any::decode(inner)?;
+            Ok(())
+        })
+    };
+    assert!(read(&ordered, Config::der()).is_ok());
+    assert!(read(&reversed, Config::der()).is_err());
+    assert!(read(&reversed, Config::ber()).is_ok());
+}

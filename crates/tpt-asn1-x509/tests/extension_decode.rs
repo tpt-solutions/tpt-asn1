@@ -66,3 +66,29 @@ fn duplicate_certificate_extension_is_rejected() {
     content.extend_from_slice(&ext);
     assert!(Extensions::from_content(&content, Config::der()).is_err());
 }
+
+#[test]
+fn attribute_string_alphabets_are_enforced() {
+    use tpt_asn1_core::any::Any;
+    use tpt_asn1_x509::name::AttributeValue;
+
+    fn value(tag: u8, content: &[u8]) -> Result<(), tpt_asn1_core::error::Error> {
+        let mut bytes = vec![tag, content.len() as u8];
+        bytes.extend_from_slice(content);
+        let any = Any::decode(&mut Reader::new(&bytes, Config::der()))?;
+        AttributeValue::from_any(&any).map(|_| ())
+    }
+
+    // PrintableString rejects '*' (0x2a) and '@' (0x40).
+    assert!(value(0x13, b"a*b").is_err());
+    assert!(value(0x13, b"a@b").is_err());
+    assert!(value(0x13, b"Example Corp, Inc.").is_ok());
+    // UTF8String must be valid UTF-8.
+    assert!(value(0x0c, &[0xff, 0xfe]).is_err());
+    assert!(value(0x0c, "héllo".as_bytes()).is_ok());
+    // BMPString needs whole 16-bit units; UniversalString whole 32-bit units.
+    assert!(value(0x1e, &[0x00, 0x41, 0x00]).is_err());
+    assert!(value(0x1c, &[0x00, 0x00, 0x00, 0x41, 0x00]).is_err());
+    // IA5String is 7-bit ASCII.
+    assert!(value(0x16, &[0xc3, 0xa9]).is_err());
+}

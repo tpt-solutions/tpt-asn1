@@ -54,15 +54,49 @@ impl<'a> AttributeValue<'a> {
         if t.class != Class::Universal {
             return Ok(mk(t.number));
         }
+        // Each string type has its own alphabet (X.680 §41 and §44). A value outside
+        // it is rejected rather than compared as if it were valid.
+        let alphabet = |ok: fn(u8) -> bool| {
+            if b.iter().all(|&c| ok(c)) {
+                Ok(())
+            } else {
+                Err(tpt_asn1_core::error::Error::BadStringType)
+            }
+        };
         Ok(match t.number {
-            Tag::UTF8_STRING => AttributeValue::Utf8(b),
-            Tag::PRINTABLE_STRING => AttributeValue::Printable(b),
-            Tag::IA5_STRING => AttributeValue::Ia5(b),
-            Tag::NUMERIC_STRING => AttributeValue::Numeric(b),
-            Tag::VISIBLE_STRING => AttributeValue::Visible(b),
+            Tag::UTF8_STRING => {
+                core::str::from_utf8(b).map_err(|_| tpt_asn1_core::error::Error::BadUtf8)?;
+                AttributeValue::Utf8(b)
+            }
+            Tag::PRINTABLE_STRING => {
+                alphabet(|c| c.is_ascii_alphanumeric() || b" '()+,-./:=?".contains(&c))?;
+                AttributeValue::Printable(b)
+            }
+            Tag::IA5_STRING => {
+                alphabet(|c| c < 0x80)?;
+                AttributeValue::Ia5(b)
+            }
+            Tag::NUMERIC_STRING => {
+                alphabet(|c| c.is_ascii_digit() || c == b' ')?;
+                AttributeValue::Numeric(b)
+            }
+            Tag::VISIBLE_STRING => {
+                alphabet(|c| (0x20..=0x7e).contains(&c))?;
+                AttributeValue::Visible(b)
+            }
             Tag::TELETEX_STRING => AttributeValue::Teletex(b),
-            Tag::BMP_STRING => AttributeValue::Bmp(b),
-            Tag::UNIVERSAL_STRING => AttributeValue::Universal(b),
+            Tag::BMP_STRING => {
+                if b.len() % 2 != 0 {
+                    return Err(tpt_asn1_core::error::Error::BadStringType);
+                }
+                AttributeValue::Bmp(b)
+            }
+            Tag::UNIVERSAL_STRING => {
+                if b.len() % 4 != 0 {
+                    return Err(tpt_asn1_core::error::Error::BadStringType);
+                }
+                AttributeValue::Universal(b)
+            }
             n => mk(n),
         })
     }

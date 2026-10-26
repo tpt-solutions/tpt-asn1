@@ -184,12 +184,6 @@ pub(crate) fn validate_policies(
 
         let constraints =
             cert.tbs.extensions.policy_constraints().map_err(|_| PathError::PolicyViolation)?;
-        // requireExplicitPolicy's skip count is measured from the certificates that
-        // follow this one, so it is applied before this certificate's own decrement
-        // (PKITS 4.9.3). The skip count includes self-issued certificates (4.9.7).
-        if let Some(v) = constraints.and_then(|pc| pc.require_explicit_policy) {
-            explicit = explicit.min(v);
-        }
         // RFC 5280 §6.1.4 (h): a certificate that is not self-issued uses up one
         // certificate of each counter.
         if !self_issued {
@@ -199,6 +193,9 @@ pub(crate) fn validate_policies(
         }
 
         // RFC 5280 §6.1.4 (i) and (j): the certificate's own constraints.
+        if let Some(v) = constraints.and_then(|pc| pc.require_explicit_policy) {
+            explicit = explicit.min(v);
+        }
         if let Some(v) = constraints.and_then(|pc| pc.inhibit_policy_mapping) {
             mapping_inhibit = mapping_inhibit.min(v);
         }
@@ -206,6 +203,18 @@ pub(crate) fn validate_policies(
             cert.tbs.extensions.inhibit_any_policy().map_err(|_| PathError::PolicyViolation)?
         {
             inhibit_any = inhibit_any.min(ia.skip_certs);
+        }
+    }
+
+    // RFC 5280 §6.1.5 (a): the wrap-up decrements explicit_policy once more.
+    explicit = explicit.saturating_sub(1);
+    // RFC 5280 §6.1.5 (b): the end-entity's own requireExplicitPolicy of 0 forces
+    // explicit policy.
+    if let Some(ee) = certs.last() {
+        let ee_constraints =
+            ee.tbs.extensions.policy_constraints().map_err(|_| PathError::PolicyViolation)?;
+        if ee_constraints.and_then(|pc| pc.require_explicit_policy) == Some(0) {
+            explicit = 0;
         }
     }
 

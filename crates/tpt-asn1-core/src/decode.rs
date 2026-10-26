@@ -86,12 +86,33 @@ where
     if tag != expected {
         return Err(Error::UnexpectedTag { expected, actual: tag });
     }
+    if r.config().rule != EncodingRule::Ber {
+        check_set_tag_order(content, *r.config())?;
+    }
     let mut inner = r.sub_reader(content)?;
     let out = f(&mut inner)?;
     if !inner.is_empty() {
         return Err(Error::TrailingData);
     }
     Ok(out)
+}
+
+/// DER and CER order `SET` components by tag (X.690 §10.3): ascending class, then
+/// ascending tag number. Equal tags are ambiguous, so they are rejected too.
+fn check_set_tag_order(content: &[u8], config: crate::reader::Config) -> Result<()> {
+    let mut scan = Reader::new(content, config);
+    let mut prev: Option<(u8, u32)> = None;
+    while !scan.is_empty() {
+        let any = crate::any::Any::decode(&mut scan)?;
+        let key = (any.tag.class.to_bits(), any.tag.number);
+        if let Some(p) = prev {
+            if key <= p {
+                return Err(Error::Custom("SET components are not in DER tag order"));
+            }
+        }
+        prev = Some(key);
+    }
+    Ok(())
 }
 
 /// Re-tag a previously encoded TLV with `new_tag`, preserving its length and
