@@ -16,8 +16,11 @@ fn main() {
     println!("issuer RDNs: {}", crl.issuer.rdns().len());
     println!("revoked entries: {}", crl.revoked.len());
     for entry in &crl.revoked {
-        let serial: String =
-            entry.serial_number_bytes().iter().map(|b| format!("{b:02x}")).collect();
+        let serial = entry.serial_number_bytes().iter().fold(String::new(), |mut s, b| {
+            use core::fmt::Write;
+            let _ = write!(s, "{b:02x}");
+            s
+        });
         match entry.reason() {
             Some(code) => println!("  serial {serial}: reason code {code}"),
             None => println!("  serial {serial}: no reason given"),
