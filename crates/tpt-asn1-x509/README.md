@@ -51,7 +51,7 @@ carries no C dependencies and no crypto primitives of its own.
 cargo add tpt-asn1-x509
 ```
 
-MSRV: **1.74.0**.
+MSRV: **1.81.0**.
 
 ## Quick start
 

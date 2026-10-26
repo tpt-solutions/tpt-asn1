@@ -11,6 +11,7 @@ description = "Cryptographic Message Syntax (PKCS#7 / CMS, RFC 5652) — zero-co
 readme = "README.md"
 keywords = ["cms", "pkcs7", "asn1", "pki", "der"]
 categories = ["cryptography", "parser-implementations"]
+documentation = "https://docs.rs/tpt-asn1-cms"
 
 [dependencies]
 tpt-asn1-core = { workspace = true }
@@ -20,3 +21,6 @@ tpt-asn1-x509 = { workspace = true }
 default = ["std", "alloc"]
 std = ["alloc"]
 alloc = []
+
+[package.metadata.docs.rs]
+all-features = true

@@ -77,9 +77,9 @@ Release model: single v1.0 (phases below are tracking buckets, not separate publ
 - [x] Path validation algorithm (RFC 5280 §6.1): signature chain, validity, name chaining, basic-constraints path length, key usage enforcement, policy graph processing, name constraints
 - [x] Revocation checking scope decision: CRL (`CertificateList`) parsing + OCSP request/response parsing (parsing/matching only vs. also fetching — decide and scope explicitly)
 - [ ] System/bundled trust root loading (for `tpt-asn1 validate --roots system`) — blocked on platform trust-store access
-- [ ] Acquire NIST PKITS test vectors; build harness mapping PKITS test groups to test functions
-- [ ] Wire PKITS harness into CI as an automated regression gate
-- [ ] Acquire Cisco Umbrella Top 1M cert corpus; build no-panic soak test (scheduled/nightly CI job)
+- [x] Acquire NIST PKITS test vectors; build harness mapping PKITS test groups to test functions
+- [x] Wire PKITS harness into CI as an automated regression gate
+- [x] Acquire Cisco Umbrella Top 1M cert corpus; build no-panic soak test (scheduled/nightly CI job)
 - [x] Unit/integration tests per extension type (10-case `tests/x509.rs` suite passing)
 
 ## Phase 5 — `tpt-asn1-cms`: Cryptographic Message Syntax / PKCS#7 (`no_std` + `alloc`)
@@ -208,15 +208,15 @@ Line references are from a static read of the code and were not confirmed by run
 - [ ] Document any officially out-of-scope PKITS subset (the open Phase 7 item)
 
 ### 9.4 Repo hygiene
-- [ ] Delete the orphan `src/extensions.rs` at the repo root (diverged from the x509 crate copy)
-- [ ] MSRV mismatch: workspace says 1.74.0, but `rust-toolchain.toml` / CI use 1.81 and `core::error::Error` needs 1.81; fix `rust-version` everywhere (and the compiler README)
-- [ ] `cargo-deny` is checked off in Phase 1 but CI only runs `cargo audit`; add a `deny.toml` + CI job
+- [x] Delete the orphan `src/extensions.rs` at the repo root (diverged from the x509 crate copy)
+- [x] MSRV: `rust-version` is 1.81.0 in the manifest and all crate READMEs, matching `rust-toolchain.toml` and CI
+- [x] `cargo-deny` is checked off in Phase 1 but CI only runs `cargo audit`; add a `deny.toml` + CI job
 - [ ] Remove stale docs: `chain.rs:28-31` ("policy mappings / delta CRLs not applied"), "Phase N item N" comments in `x509/lib.rs` / `verify.rs`, CLI `validate` / `text` help saying x509 is "not yet integrated" (`cli/src/main.rs:224,325`), and the Phase 6 line mentioning a non-existent `x509/src/crypto.rs`
-- [ ] Reconcile stale `todo.md` checkboxes (Phase 4 lines 80-82 are done per Phase 7)
+- [x] Reconcile stale `todo.md` checkboxes (Phase 4 lines 80-82 are done per Phase 7)
 - [ ] Rename or fix `constant_time_compare` (`util.rs:52`, branches on data and returns early on length); review call sites
-- [ ] Commit `Cargo.lock` (the workspace ships a binary and a fuzz workspace)
-- [ ] Add `exclude` for PKITS data and `umbrella_corpus` so the crates.io tarballs stay small; add `documentation` and `[package.metadata.docs.rs]` (+ `docsrs` cfg) to all crates; use workspace keywords/categories consistently
-- [ ] `oss-fuzz/project.yaml` placeholder maintainer email; repo URL case (`tpt-solutions` vs `TPT-Solutions`)
+- [x] Commit `Cargo.lock` (the workspace ships a binary and a fuzz workspace)
+- [x] Add `exclude` for PKITS data and `umbrella_corpus` so the crates.io tarballs stay small; add `documentation` and `[package.metadata.docs.rs]` (+ `docsrs` cfg) to all crates; use workspace keywords/categories consistently
+- [~] `oss-fuzz/project.yaml` repo URL fixed to match the git remote. Maintainer email is still a placeholder: needs your choice of public contact address
 - [ ] Replace `compiler/tests/debug.rs` (token dump) with real tests; strengthen the trivial cms `lib.rs` doctest
 - [ ] cms `lib.rs:29-39` modules lack the `cfg(feature = "alloc")` gates x509 has; add `--no-default-features` / `no_std` CI jobs for x509 and cms
 

@@ -48,7 +48,7 @@ unsafe pointer arithmetic to get wrong.
 cargo add tpt-asn1-core
 ```
 
-Minimum Supported Rust Version (MSRV): **1.74.0**.
+Minimum Supported Rust Version (MSRV): **1.81.0**.
 
 ## Quick start
 

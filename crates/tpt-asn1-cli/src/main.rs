@@ -221,8 +221,8 @@ fn cmd_validate(a: ValidateArgs) -> Result<i32, CliError> {
     if a.roots.is_some() {
         eprintln!(
             "tpt-asn1: note: --roots is accepted but trust-anchor path validation\n\
-             \x20        requires the tpt-asn1-x509 crate (Phase 4), not yet integrated.\n\
-             \x20        Performing structural certificate checks only."
+             \x20        needs chain validation from the tpt-asn1-x509 crate, which this CLI\n\
+             \x20        does not use yet. Performing structural certificate checks only."
         );
     }
     let blocks = load_blocks(&a.chain)?;
@@ -261,7 +261,7 @@ fn cmd_validate(a: ValidateArgs) -> Result<i32, CliError> {
     if failed == 0 {
         println!(
             "tpt-asn1: all {} certificate(s) parsed structurally. \
-             Full chain/path validation pending tpt-asn1-x509 (Phase 4).",
+             Full chain/path validation is not run by this CLI yet.",
             blocks.len()
         );
         Ok(0)
@@ -322,7 +322,7 @@ fn cmd_text(a: TextArgs) -> Result<i32, CliError> {
     }
     eprintln!(
         "tpt-asn1: note: typed field decoding (issuer, validity, extensions, …)\n\
-         \x20        requires the tpt-asn1-x509 crate (Phase 4), not yet integrated."
+         \x20        needs the tpt-asn1-x509 crate, which this CLI does not use yet."
     );
     Ok(0)
 }
@@ -341,8 +341,8 @@ fn cmd_fuzz(a: FuzzArgs) -> Result<i32, CliError> {
 fn cmd_req(_a: ReqArgs) -> Result<i32, CliError> {
     eprintln!(
         "tpt-asn1: `req` (CSR / self-signed cert generation) is not yet implemented.\n\
-         \x20        It requires a pluggable crypto backend and the tpt-asn1-x509 crate\n\
-         \x20        (Phases 4-5), which are not yet integrated."
+         \x20        It needs a pluggable crypto backend and the tpt-asn1-x509 and\n\
+         \x20        tpt-asn1-cms crates to build the structures, which are not wired in yet."
     );
     Ok(2)
 }

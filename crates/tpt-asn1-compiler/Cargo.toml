@@ -11,6 +11,7 @@ description = ".tpt-asn1 DSL to Rust code generator: hand-written lexer/parser a
 readme = "README.md"
 keywords = ["asn1", "codegen", "der", "parser", "build"]
 categories = ["development-tools::build-utils", "encoding", "parser-implementations"]
+documentation = "https://docs.rs/tpt-asn1-compiler"
 
 [dependencies]
 tpt-asn1-core = { workspace = true }
@@ -22,3 +23,6 @@ hex = "0.4"
 default = ["std", "alloc"]
 std = ["alloc"]
 alloc = []
+
+[package.metadata.docs.rs]
+all-features = true

@@ -96,6 +96,16 @@ jobs:
       - name: Audit dependencies
         run: cargo audit
 
+  deny:
+    name: License, ban, and source policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run cargo-deny (deny.toml)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+
   fuzz:
     name: Fuzz targets (build + smoke)
     runs-on: ubuntu-latest

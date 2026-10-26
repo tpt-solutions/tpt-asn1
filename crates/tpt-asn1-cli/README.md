@@ -41,7 +41,7 @@ Or build from the workspace:
 cargo build -p tpt-asn1-cli --release
 ```
 
-MSRV: **1.74.0**.
+MSRV: **1.81.0**.
 
 ## Usage
 

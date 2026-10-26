@@ -11,6 +11,13 @@ description = "X.509v3 certificate parsing, validation, and RFC 5280 6.1 chain b
 readme = "README.md"
 keywords = ["x509", "asn1", "pki", "certificate", "der"]
 categories = ["cryptography", "parser-implementations"]
+documentation = "https://docs.rs/tpt-asn1-x509"
+# The PKITS and Umbrella fixtures are about 6 MB of test data. They stay in the
+# repository for the test suite but are not shipped in the crate tarball.
+exclude = ["tests/pkits_data/", "tests/umbrella_corpus/", "tests/pkits_suite.rs.in"]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [dependencies]
 tpt-asn1-core = { workspace = true }

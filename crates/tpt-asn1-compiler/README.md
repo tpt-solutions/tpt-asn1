@@ -37,7 +37,7 @@ reuses the fail-closed `tpt-asn1-core` codec — no C dependencies, no `unsafe`.
 cargo add tpt-asn1-compiler --build
 ```
 
-MSRV: **1.74.0**.
+MSRV: **1.81.0**.
 
 ## Usage
 

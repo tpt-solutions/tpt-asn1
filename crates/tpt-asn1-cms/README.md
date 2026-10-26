@@ -40,7 +40,7 @@ primitive choices stay with the caller.
 cargo add tpt-asn1-cms
 ```
 
-MSRV: **1.74.0**.
+MSRV: **1.81.0**.
 
 ## Quick start
 

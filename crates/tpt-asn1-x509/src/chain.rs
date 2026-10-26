@@ -25,10 +25,11 @@
 //! 7. revocation against the supplied full CRLs (RFC 5280 §6.3),
 //! 8. policy acceptance (default `anyPolicy`; explicit sets intersect).
 //!
-//! Policy mapping / `policyConstraints` / `inhibitAnyPolicy` are *parsed* by the
-//! extension layer but only lightly enforced here (documented limitation).
-//! Delta CRLs and CRL distribution-point / issuing-distribution-point scoping
-//! are not yet applied.
+//! Policy processing (RFC 5280 §6.1.2–6.1.5) lives in the `policy` module.
+//! Revocation covers delta CRLs and distribution-point scoping.
+//!
+//! Known limitations: trust anchors are always supplied by the caller (there is
+//! no system trust store), and the PKITS suite has one open case (§4.4.19).
 
 use alloc::vec::Vec;
 
