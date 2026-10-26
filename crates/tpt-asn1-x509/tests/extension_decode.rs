@@ -92,3 +92,22 @@ fn attribute_string_alphabets_are_enforced() {
     // IA5String is 7-bit ASCII.
     assert!(value(0x16, &[0xc3, 0xa9]).is_err());
 }
+
+#[test]
+fn duplicate_certificate_policy_oid_is_rejected() {
+    use tpt_asn1_x509::extensions::CertificatePolicies;
+    // anyPolicy (2.5.29.32.0) twice, then once alongside another policy.
+    let any = [0x30, 0x06, 0x06, 0x04, 0x55, 0x1d, 0x20, 0x00];
+    let other = [0x30, 0x06, 0x06, 0x04, 0x55, 0x1d, 0x20, 0x01];
+    let duplicate = [any.as_slice(), any.as_slice()].concat();
+    let distinct = [any.as_slice(), other.as_slice()].concat();
+    let wrap = |body: &[u8]| {
+        let mut v = vec![0x30, body.len() as u8];
+        v.extend_from_slice(body);
+        v
+    };
+    let dup = wrap(&duplicate);
+    let ok = wrap(&distinct);
+    assert!(CertificatePolicies::decode(&mut Reader::new(&dup, Config::der())).is_err());
+    assert!(CertificatePolicies::decode(&mut Reader::new(&ok, Config::der())).is_ok());
+}

@@ -72,8 +72,10 @@ pub fn verify<B: tpt_asn1_x509::verify::SignatureVerifier>(
 
     // Collect candidate certificate DER (X.509 `Certificate` SEQUENCEs).
     let mut certs: Vec<&[u8]> = Vec::with_capacity(sd.certificates.len() + extra_certs.len());
-    for c in &sd.certificates {
-        certs.push(if c.tag == Tag::context(true, 0) { c.value } else { c.full });
+    // Only plain certificates (bare SEQUENCEs) can match a signer. The other
+    // CertificateChoices alternatives are not X.509 certificates.
+    for c in sd.certificates.iter().filter(|c| c.tag.is_universal(Tag::SEQUENCE)) {
+        certs.push(c.full);
     }
     certs.extend_from_slice(extra_certs);
 

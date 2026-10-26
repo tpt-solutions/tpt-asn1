@@ -67,14 +67,16 @@ impl<'a> SignedData<'a> {
 
     /// Extract the verification fields of every embedded certificate.
     ///
-    /// Embedded certificates arrive inside a `CertificateChoices` wrapper: a
-    /// plain X.509 `Certificate` is `[0] EXPLICIT Certificate`, so we unwrap the
-    /// explicit tag to recover the `Certificate` SEQUENCE before extracting.
+    /// Extract the verification fields of every embedded X.509 certificate.
+    ///
+    /// RFC 5652 `CertificateChoices` is a CHOICE. A plain `Certificate` is a bare
+    /// SEQUENCE. The `[0]`, `[1]`, `[2]` and `[3]` alternatives are extended, attribute
+    /// and other certificate formats, which are skipped here.
     pub fn embedded_certs(&self) -> impl Iterator<Item = Result<cert::CertFields<'a>>> + '_ {
-        self.certificates.iter().map(|c| {
-            let der = if c.tag == Tag::context(true, 0) { c.value } else { c.full };
-            cert::extract_cert_fields(der)
-        })
+        self.certificates
+            .iter()
+            .filter(|c| c.tag.is_universal(Tag::SEQUENCE))
+            .map(|c| cert::extract_cert_fields(c.full))
     }
 }
 

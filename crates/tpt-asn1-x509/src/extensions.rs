@@ -767,6 +767,10 @@ impl<'a> Decode<'a> for CertificatePolicies<'a> {
                     }
                     Ok(PolicyInformation { policy_id, qualifiers })
                 })?;
+                // RFC 5280 §4.2.1.4: a policy OID must not appear more than once.
+                if policies.iter().any(|p: &PolicyInformation<'_>| p.policy_id == info.policy_id) {
+                    return Err(Error::Custom("duplicate certificate policy OID"));
+                }
                 policies.push(info);
             }
             Ok(CertificatePolicies { policies })
