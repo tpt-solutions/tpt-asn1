@@ -321,6 +321,140 @@ impl CertificateBuilder {
     }
 }
 
+/// Builds a PKCS#10 `CertificationRequest` (RFC 2986). The caller signs the
+/// `CertificationRequestInfo`, as with certificates.
+#[derive(Clone, Debug)]
+pub struct CsrBuilder {
+    subject: Vec<NameAttribute>,
+    public_key_algorithm: Vec<u64>,
+    public_key_parameters: Option<Vec<u8>>,
+    public_key: Vec<u8>,
+    signature_algorithm: Vec<u64>,
+}
+
+impl CsrBuilder {
+    /// Start a request for the given signature algorithm and subject public key.
+    pub fn new(
+        signature_algorithm: &[u64],
+        public_key_algorithm: &[u64],
+        public_key_parameters_der_tlv: Option<&[u8]>,
+        public_key: &[u8],
+    ) -> Self {
+        CsrBuilder {
+            subject: Vec::new(),
+            public_key_algorithm: public_key_algorithm.to_vec(),
+            public_key_parameters: public_key_parameters_der_tlv.map(|p| p.to_vec()),
+            public_key: public_key.to_vec(),
+            signature_algorithm: signature_algorithm.to_vec(),
+        }
+    }
+
+    /// Add an attribute to the subject name, in order.
+    pub fn subject_attribute(mut self, oid: &[u64], value: &str) -> Self {
+        self.subject.push(NameAttribute { oid: oid.to_vec(), value: value.into() });
+        self
+    }
+
+    /// The DER `CertificationRequestInfo` (the bytes that are signed).
+    pub fn info_der(&self) -> Vec<u8> {
+        let mut spki_alg = vec![oid(&self.public_key_algorithm)];
+        if let Some(p) = &self.public_key_parameters {
+            spki_alg.push(p.clone());
+        }
+        let spki = seq(&[seq(&spki_alg), tlv(0x03, &[&[0u8][..], &self.public_key[..]].concat())]);
+        seq(&[
+            // version INTEGER 0
+            tlv(0x02, &[0x00]),
+            name(&self.subject),
+            spki,
+            // attributes [0] IMPLICIT SET OF Attribute, empty.
+            tlv(0xa0, &[]),
+        ])
+    }
+
+    /// Build the request. `sign` receives the `CertificationRequestInfo` bytes.
+    pub fn build(&self, sign: impl FnOnce(&[u8]) -> Vec<u8>) -> Vec<u8> {
+        let info = self.info_der();
+        let signature = sign(&info);
+        let sig_alg = seq(&[oid(&self.signature_algorithm)]);
+        let sig_value = tlv(0x03, &[&[0u8][..], &signature[..]].concat());
+        seq(&[info, sig_alg, sig_value])
+    }
+}
+
+/// Builds a v2 `CertificateList` (a CRL, RFC 5280 §5.1) with revoked entries.
+#[derive(Clone, Debug)]
+pub struct CrlBuilder {
+    signature_algorithm: Vec<u64>,
+    issuer: Vec<NameAttribute>,
+    this_update: i64,
+    next_update: Option<i64>,
+    revoked: Vec<(Vec<u8>, i64)>,
+}
+
+impl CrlBuilder {
+    /// Start a CRL for the given signature algorithm, with `thisUpdate` as Unix seconds.
+    pub fn new(signature_algorithm: &[u64], this_update: i64) -> Self {
+        CrlBuilder {
+            signature_algorithm: signature_algorithm.to_vec(),
+            issuer: Vec::new(),
+            this_update,
+            next_update: None,
+            revoked: Vec::new(),
+        }
+    }
+
+    /// Add an attribute to the issuer name, in order.
+    pub fn issuer_attribute(mut self, oid: &[u64], value: &str) -> Self {
+        self.issuer.push(NameAttribute { oid: oid.to_vec(), value: value.into() });
+        self
+    }
+
+    /// Set `nextUpdate` as Unix seconds.
+    pub fn next_update(mut self, next_update: i64) -> Self {
+        self.next_update = Some(next_update);
+        self
+    }
+
+    /// Revoke the certificate with the given serial number (big-endian) at `when`.
+    pub fn revoke(mut self, serial: &[u8], when: i64) -> Self {
+        self.revoked.push((serial.to_vec(), when));
+        self
+    }
+
+    /// The DER `TBSCertList` (the bytes that are signed).
+    pub fn tbs_der(&self) -> Vec<u8> {
+        let mut parts = vec![
+            // version INTEGER v2 (1)
+            tlv(0x02, &[0x01]),
+            seq(&[oid(&self.signature_algorithm)]),
+            name(&self.issuer),
+            time(self.this_update),
+        ];
+        if let Some(next) = self.next_update {
+            parts.push(time(next));
+        }
+        if !self.revoked.is_empty() {
+            let entries: Vec<Vec<u8>> = self
+                .revoked
+                .iter()
+                .map(|(serial, when)| seq(&[positive_integer(serial), time(*when)]))
+                .collect();
+            parts.push(seq(&entries));
+        }
+        seq(&parts)
+    }
+
+    /// Build the CRL. `sign` receives the `TBSCertList` bytes.
+    pub fn build(&self, sign: impl FnOnce(&[u8]) -> Vec<u8>) -> Vec<u8> {
+        let tbs = self.tbs_der();
+        let signature = sign(&tbs);
+        let sig_alg = seq(&[oid(&self.signature_algorithm)]);
+        let sig_value = tlv(0x03, &[&[0u8][..], &signature[..]].concat());
+        seq(&[tbs, sig_alg, sig_value])
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::expect_used, clippy::panic)]
 mod tests {
