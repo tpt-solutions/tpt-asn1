@@ -40,6 +40,7 @@
 #![no_std]
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 #![warn(rust_2018_idioms)]
 
 #[cfg(feature = "alloc")]

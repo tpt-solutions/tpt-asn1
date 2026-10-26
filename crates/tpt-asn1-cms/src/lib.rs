@@ -23,6 +23,7 @@
 #![no_std]
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 // CMS structures own `Vec`s and the signature-verification path allocates, so the
 // crate cannot build without `alloc`. Say so directly rather than failing later
