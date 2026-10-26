@@ -69,7 +69,7 @@ fn object_identifier() {
     assert!(d.matches(&[2, 5, 29, 17]));
     assert!(!d.matches(&[2, 5, 29, 18]));
     let arcs: Vec<u64> = d.arcs().collect();
-    assert_eq!(arcs, vec![85, 29, 17]);
+    assert_eq!(arcs, vec![2, 5, 29, 17]);
 }
 
 #[test]
@@ -229,4 +229,21 @@ fn integer_roundtrip_matrix() {
         let dec = decode::<Integer>(&enc).unwrap();
         assert_eq!(dec.as_i64(), Some(v), "value {v} round-trip");
     }
+}
+
+#[test]
+fn arcs_split_the_first_subidentifier() {
+    // rsaEncryption 1.2.840.113549.1.1.1
+    let rsa = ObjectIdentifier(&[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01]);
+    assert_eq!(rsa.arcs().collect::<Vec<_>>(), vec![1, 2, 840, 113549, 1, 1, 1]);
+    assert!(rsa.matches(&[1, 2, 840, 113549, 1, 1, 1]));
+
+    // 0.39: the first subidentifier is 39, so arcs are 0 and 39.
+    let zero = ObjectIdentifier(&[0x27]);
+    assert_eq!(zero.arcs().collect::<Vec<_>>(), vec![0, 39]);
+
+    // 2.100.3: the first subidentifier is 180, a two-octet value, giving arcs 2 and 100.
+    let two = ObjectIdentifier(&[0x81, 0x34, 0x03]);
+    assert_eq!(two.arcs().collect::<Vec<_>>(), vec![2, 100, 3]);
+    assert!(two.matches(&[2, 100, 3]));
 }

@@ -117,7 +117,10 @@ fn oid_arc_overflow_is_safe() {
     // digit terminates it (0x7f has the high bit clear).
     let mut nine = [0xffu8; 9];
     nine[8] = 0x7f;
-    assert_eq!(ObjectIdentifier(&nine).arcs().next(), Some(u64::MAX >> 1));
+    // The first subidentifier is split into arcs 2 and (value - 80).
+    let mut arcs = ObjectIdentifier(&nine).arcs();
+    assert_eq!(arcs.next(), Some(2));
+    assert_eq!(arcs.next(), Some((u64::MAX >> 1) - 80));
 
     // A 10-digit subidentifier cannot fit in u64 and must stop gracefully,
     // even when its final digit is a clean terminator.

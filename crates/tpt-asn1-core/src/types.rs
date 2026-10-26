@@ -307,7 +307,7 @@ pub struct ObjectIdentifier<'a>(pub &'a [u8]);
 impl<'a> ObjectIdentifier<'a> {
     /// Iterate the on-wire base-128 subidentifiers.
     pub fn arcs(&self) -> OidIter<'a> {
-        OidIter { remaining: self.0 }
+        OidIter::new(self.0)
     }
 
     /// The raw object-identifier subidentifier bytes (the value content).
@@ -369,15 +369,25 @@ impl<'a> ObjectIdentifier<'a> {
     }
 }
 
-/// Iterator over an OID's base-128 subidentifiers.
+/// Iterator over an OID's arcs (X.660 §7). The first subidentifier encodes two arcs,
+/// so it is split into them: arc 0 and arc 1 when it is below 80, otherwise 2 and
+/// `value - 80`.
 #[derive(Clone)]
 pub struct OidIter<'a> {
     remaining: &'a [u8],
+    /// Whether the first subidentifier has been read.
+    started: bool,
+    /// The second arc of the first subidentifier, waiting to be yielded.
+    pending: Option<u64>,
 }
 
-impl<'a> Iterator for OidIter<'a> {
-    type Item = u64;
-    fn next(&mut self) -> Option<u64> {
+impl<'a> OidIter<'a> {
+    fn new(bytes: &'a [u8]) -> Self {
+        OidIter { remaining: bytes, started: false, pending: None }
+    }
+
+    /// Read the next base-128 subidentifier, or `None` at the end or on overflow.
+    fn next_subidentifier(&mut self) -> Option<u64> {
         if self.remaining.is_empty() {
             return None;
         }
@@ -400,6 +410,28 @@ impl<'a> Iterator for OidIter<'a> {
             if self.remaining.is_empty() {
                 return None;
             }
+        }
+    }
+}
+
+impl<'a> Iterator for OidIter<'a> {
+    type Item = u64;
+
+    fn next(&mut self) -> Option<u64> {
+        if let Some(arc) = self.pending.take() {
+            return Some(arc);
+        }
+        let subidentifier = self.next_subidentifier()?;
+        if self.started {
+            return Some(subidentifier);
+        }
+        self.started = true;
+        if subidentifier < 80 {
+            self.pending = Some(subidentifier % 40);
+            Some(subidentifier / 40)
+        } else {
+            self.pending = Some(subidentifier - 80);
+            Some(2)
         }
     }
 }
