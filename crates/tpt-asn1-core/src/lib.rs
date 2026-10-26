@@ -50,6 +50,8 @@ pub mod any;
 pub mod decode;
 pub mod error;
 pub mod length;
+#[cfg(feature = "alloc")]
+pub mod pem;
 pub mod reader;
 pub mod tag;
 pub mod types;

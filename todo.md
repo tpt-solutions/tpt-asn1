@@ -229,7 +229,7 @@ Line references are from a static read of the code and were not confirmed by run
 - [ ] Encoders for x509 / cms (only core has `Encode`): Certificate / TBSCertificate builder, CSR (PKCS#10) parse + build, CRL, OCSP request, CMS sign / encrypt
 - [ ] Derive macro crate (`tpt-asn1-derive`) as an alternative to the `build.rs` DSL path
 - [ ] Compiler: SIZE / range constraints, `...` extensibility, anonymous inline CHOICE (`codegen.rs:382`), DEFAULT beyond BOOLEAN/INTEGER/NULL (`parser.rs:326`), nested ENUMERATED, named bits, OID value assignments; consider importing standard `.asn` modules (IMPORTS)
-- [ ] PEM encode/decode in the library crates (today only in the CLI); PKCS#1 / SEC1 / PKCS#8 / PKCS#12 key structures
+- [~] PEM encode/decode is now in `tpt_asn1_core::pem` (strict base64, typed `PemError`, `encode_pem`), and the CLI uses it. Still open: PKCS#1 / SEC1 / PKCS#8 / PKCS#12 key structures
 - [ ] Trust-store loading (system / bundled roots), hostname verification, OCSP response signature validation
 - [ ] CMS: RFC 3161 timestamps (decide scope), AuthenticatedData / AuthEnvelopedData, countersignatures / CAdES
 - [ ] Optional features: `zeroize`, `serde`, `arbitrary`, `defmt`; make the `alloc` / `std` flags actually gate code
