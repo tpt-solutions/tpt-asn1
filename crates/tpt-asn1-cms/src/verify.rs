@@ -36,6 +36,9 @@ pub enum VerificationResult {
     DigestMismatch,
     /// The cryptographic backend reported an invalid signature.
     SignatureInvalid,
+    /// The backend could not check this signer at all: an unsupported algorithm,
+    /// an unparsable key, or an internal error. Other signers are still checked.
+    Unverifiable,
 }
 
 /// Verify every `SignerInfo` in `sd`.
@@ -126,8 +129,10 @@ fn verify_signer<B: tpt_asn1_x509::verify::SignatureVerifier>(
         Some(attrs) => {
             let content = content.ok_or(Error::MissingContent)?;
             // Compute the digest and check the message-digest attribute.
-            let digest =
-                backend.digest(signer.digest_algorithm_bytes(), content).map_err(map_verify_err)?;
+            // A backend failure for this signer must not abort the others.
+            let Ok(digest) = backend.digest(signer.digest_algorithm_bytes(), content) else {
+                return Ok(VerificationResult::Unverifiable);
+            };
             check_signed_attributes(attrs, &sd.e_content_type)?;
             match attrs.find(oid::ATTR_MESSAGE_DIGEST).and_then(|a| a.first_value()) {
                 Some(md) => {
@@ -166,27 +171,17 @@ fn verify_signer<B: tpt_asn1_x509::verify::SignatureVerifier>(
     };
 
     // 3. Delegate the signature math to the backend.
-    let ok = backend
-        .verify_signature(
-            signer.signature_algorithm_bytes(),
-            fields.spki_algorithm,
-            fields.spki_key,
-            &tbs,
-            signer.signature,
-        )
-        .map_err(map_verify_err)?;
-    if ok {
-        Ok(VerificationResult::Success)
-    } else {
-        Ok(VerificationResult::SignatureInvalid)
-    }
-}
-
-fn map_verify_err(e: tpt_asn1_x509::verify::VerifyError) -> Error {
-    match e {
-        tpt_asn1_x509::verify::VerifyError::UnsupportedAlgorithm => Error::UnsupportedAlgorithm,
-        tpt_asn1_x509::verify::VerifyError::InvalidKey => Error::UnexpectedStructure,
-        tpt_asn1_x509::verify::VerifyError::InvalidSignature => Error::VerificationFailed,
-        tpt_asn1_x509::verify::VerifyError::Internal => Error::UnexpectedStructure,
+    let verdict = backend.verify_signature_with_params(
+        signer.signature_algorithm_bytes(),
+        fields.spki_algorithm,
+        fields.spki_params,
+        fields.spki_key,
+        &tbs,
+        signer.signature,
+    );
+    match verdict {
+        Ok(true) => Ok(VerificationResult::Success),
+        Ok(false) => Ok(VerificationResult::SignatureInvalid),
+        Err(_) => Ok(VerificationResult::Unverifiable),
     }
 }

@@ -135,7 +135,7 @@ impl<'a> Decode<'a> for SignerInfo<'a> {
                 if tag == Tag::context(false, 0) {
                     SignerIdentifier::SubjectKeyIdentifier(value)
                 } else if tag.is_universal(Tag::SEQUENCE) {
-                    let mut ias = Reader::new(value, tpt_asn1_core::reader::Config::der());
+                    let mut ias = Reader::new(value, *s.config());
                     let issuer = full_tlv(&mut ias)?;
                     let (_, _, serial) = ias.read_tlv()?;
                     SignerIdentifier::IssuerAndSerialNumber { issuer, serial }
@@ -156,7 +156,7 @@ impl<'a> Decode<'a> for SignerInfo<'a> {
                 } else {
                     // This TLV is actually the signatureAlgorithm; re-parse it.
                     let full = s.slice(start, s.position());
-                    let mut sig_r = Reader::new(full, tpt_asn1_core::reader::Config::der());
+                    let mut sig_r = Reader::new(full, *s.config());
                     let signature_algorithm = AlgorithmIdentifier::decode(&mut sig_r)?;
                     return finish_signer(
                         s,

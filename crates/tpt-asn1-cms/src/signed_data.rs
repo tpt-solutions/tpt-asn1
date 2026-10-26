@@ -146,8 +146,7 @@ fn decode_encap_content_info<'a>(
                 return Err(Error::UnexpectedStructure.into());
             }
             // value is the inner OCTET STRING TLV.
-            let os =
-                OctetString::decode(&mut Reader::new(value, tpt_asn1_core::reader::Config::der()))?;
+            let os = OctetString::decode(&mut Reader::new(value, *inner.config()))?;
             Some(os)
         };
         Ok((e_content_type, e_content))

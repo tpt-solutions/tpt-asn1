@@ -26,6 +26,8 @@ pub struct CertFields<'a> {
     pub issuer: &'a [u8],
     /// Raw `SubjectPublicKeyInfo` algorithm OID bytes.
     pub spki_algorithm: &'a [u8],
+    /// Raw `AlgorithmIdentifier` parameters TLVs of the key, if any.
+    pub spki_params: Option<&'a [u8]>,
     /// Raw `subjectPublicKey` BIT STRING data (key bits only).
     pub spki_key: &'a [u8],
     /// The `SubjectKeyIdentifier` extension value, if present.
@@ -82,7 +84,8 @@ fn finish_tbs<'a>(mut tbs: Reader<'a>, serial: &'a [u8]) -> Result<CertFields<'a
 
     // subjectPublicKeyInfo SEQUENCE { algorithm, subjectPublicKey BIT STRING }
     let spki = read_full_tlv(&mut tbs)?;
-    let (spki_algorithm, spki_key) = parse_spki(spki)?;
+    let SpkiParts { algorithm: spki_algorithm, params: spki_params, key: spki_key } =
+        parse_spki(spki)?;
 
     // Remaining: optional [1]/[2] unique IDs and [3] EXPLICIT extensions.
     let mut subject_key_id = None;
@@ -93,10 +96,17 @@ fn finish_tbs<'a>(mut tbs: Reader<'a>, serial: &'a [u8]) -> Result<CertFields<'a
         }
     }
 
-    Ok(CertFields { serial, issuer, spki_algorithm, spki_key, subject_key_id })
+    Ok(CertFields { serial, issuer, spki_algorithm, spki_params, spki_key, subject_key_id })
 }
 
-fn parse_spki(spki: &[u8]) -> Result<(&[u8], &[u8])> {
+/// The parts of a `SubjectPublicKeyInfo` that signature verification needs.
+struct SpkiParts<'a> {
+    algorithm: &'a [u8],
+    params: Option<&'a [u8]>,
+    key: &'a [u8],
+}
+
+fn parse_spki(spki: &[u8]) -> Result<SpkiParts<'_>> {
     let mut r = Reader::new(spki, tpt_asn1_core::reader::Config::der());
     // SubjectPublicKeyInfo ::= SEQUENCE { algorithm AlgorithmIdentifier, ... }
     let (tag, _, spki_inner) = r.read_tlv()?;
@@ -109,12 +119,15 @@ fn parse_spki(spki: &[u8]) -> Result<(&[u8], &[u8])> {
     if !atag.is_universal(Tag::SEQUENCE) {
         return Err(Error::UnexpectedStructure);
     }
-    let alg = ObjectIdentifier::decode(&mut Reader::new(
-        alg_inner,
-        tpt_asn1_core::reader::Config::der(),
-    ))?;
+    let mut alg_reader = Reader::new(alg_inner, tpt_asn1_core::reader::Config::der());
+    let alg = ObjectIdentifier::decode(&mut alg_reader)?;
+    // Whatever follows the OID is the parameters TLV (for example DSA's domain
+    // parameters, which a verifier must inherit). It is absent for RSA and EC keys
+    // whose parameters are omitted.
+    let params = alg_reader.read_remaining()?;
+    let params = if params.is_empty() { None } else { Some(params) };
     let key = BitString::decode(&mut r2)?;
-    Ok((alg.0, key.data))
+    Ok(SpkiParts { algorithm: alg.0, params, key: key.data })
 }
 
 fn find_ski(exts: &[u8]) -> Result<Option<&[u8]>> {

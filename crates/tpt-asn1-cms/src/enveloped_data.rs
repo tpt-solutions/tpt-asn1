@@ -76,7 +76,7 @@ impl<'a> Decode<'a> for EnvelopedData<'a> {
             } else {
                 // This TLV is recipientInfos (SET).
                 let full = inner.slice(start, inner.position());
-                let mut rr = Reader::new(full, tpt_asn1_core::reader::Config::der());
+                let mut rr = Reader::new(full, *inner.config());
                 let (t, _, v) = rr.read_tlv()?;
                 if !t.is_universal(Tag::SET) {
                     return Err(Error::UnexpectedStructure.into());
@@ -85,8 +85,7 @@ impl<'a> Decode<'a> for EnvelopedData<'a> {
             };
             let _ = value; // originatorInfo content (unused for decrypt here)
 
-            let mut ri_r =
-                Reader::new(recipient_infos_content, tpt_asn1_core::reader::Config::der());
+            let mut ri_r = Reader::new(recipient_infos_content, *inner.config());
             let mut recipient_infos = alloc::vec::Vec::new();
             while !ri_r.is_empty() {
                 recipient_infos.push(RecipientInfo::decode(&mut ri_r)?);

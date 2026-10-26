@@ -105,14 +105,14 @@ impl<'a> tpt_asn1_core::decode::Decode<'a> for RecipientInfo<'a> {
         let any = Any::decode(r)?;
         if any.tag.is_universal(Tag::SEQUENCE) {
             // KeyTransRecipientInfo
-            let mut ir = Reader::new(any.value, tpt_asn1_core::reader::Config::der());
+            let mut ir = Reader::new(any.value, *r.config());
             let version = Integer::decode(&mut ir)?.as_u64().ok_or(Error::UnsupportedVersion)?;
             let rid = {
                 let (tag, _, value) = ir.read_tlv()?;
                 if tag == Tag::context(false, 0) {
                     RecipientIdentifier::SubjectKeyIdentifier(value)
                 } else if tag.is_universal(Tag::SEQUENCE) {
-                    let mut ias = Reader::new(value, tpt_asn1_core::reader::Config::der());
+                    let mut ias = Reader::new(value, *r.config());
                     let issuer = full_tlv(&mut ias)?;
                     let (_, _, serial) = ias.read_tlv()?;
                     RecipientIdentifier::IssuerAndSerialNumber { issuer, serial }
@@ -129,7 +129,7 @@ impl<'a> tpt_asn1_core::decode::Decode<'a> for RecipientInfo<'a> {
                 encrypted_key,
             }))
         } else if any.tag == Tag::context(true, 0) {
-            Ok(RecipientInfo::KeyAgree(decode_key_agree(any.value)?))
+            Ok(RecipientInfo::KeyAgree(decode_key_agree(any.value, *r.config())?))
         } else if any.tag == Tag::context(true, 1) {
             Ok(RecipientInfo::Kek(any))
         } else if any.tag == Tag::context(true, 2) {
@@ -141,9 +141,12 @@ impl<'a> tpt_asn1_core::decode::Decode<'a> for RecipientInfo<'a> {
 }
 
 #[cfg(feature = "alloc")]
-fn decode_key_agree<'a>(value: &'a [u8]) -> Result<KeyAgreeRecipientInfo<'a>> {
+fn decode_key_agree<'a>(
+    value: &'a [u8],
+    config: tpt_asn1_core::reader::Config,
+) -> Result<KeyAgreeRecipientInfo<'a>> {
     use alloc::vec::Vec;
-    let mut r = Reader::new(value, tpt_asn1_core::reader::Config::der());
+    let mut r = Reader::new(value, config);
     let version = Integer::decode(&mut r)?.as_u64().ok_or(Error::UnsupportedVersion)?;
     // originator [0] EXPLICIT
     let (otag, _, ovalue) = r.read_tlv()?;
@@ -151,7 +154,7 @@ fn decode_key_agree<'a>(value: &'a [u8]) -> Result<KeyAgreeRecipientInfo<'a>> {
         return Err(Error::UnexpectedStructure);
     }
     let originator = {
-        let mut or = Reader::new(ovalue, tpt_asn1_core::reader::Config::der());
+        let mut or = Reader::new(ovalue, config);
         Any::decode(&mut or)?
     };
     // ukm [1] IMPLICIT BIT STRING OPTIONAL
@@ -167,11 +170,11 @@ fn decode_key_agree<'a>(value: &'a [u8]) -> Result<KeyAgreeRecipientInfo<'a>> {
     if !rtag.is_universal(Tag::SEQUENCE) {
         return Err(Error::UnexpectedStructure);
     }
-    let mut rr = Reader::new(rvalue, tpt_asn1_core::reader::Config::der());
+    let mut rr = Reader::new(rvalue, config);
     let mut recipient_encrypted_keys: Vec<RecipientEncryptedKey<'a>> = Vec::new();
     while !rr.is_empty() {
         let (_, _, rek) = rr.read_tlv()?;
-        let mut kr = Reader::new(rek, tpt_asn1_core::reader::Config::der());
+        let mut kr = Reader::new(rek, config);
         let rid = Any::decode(&mut kr)?;
         let encrypted_key = OctetString::decode(&mut kr)?.0;
         recipient_encrypted_keys.push(RecipientEncryptedKey { rid, encrypted_key });

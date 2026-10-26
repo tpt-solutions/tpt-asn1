@@ -362,3 +362,32 @@ fn unwrap_and_decrypt_failures_are_indistinguishable() {
     assert_eq!(a, Err(tpt_asn1_cms::error::Error::DecryptionFailed));
     assert_eq!(b, Err(tpt_asn1_cms::error::Error::DecryptionFailed));
 }
+
+/// A backend that cannot do any work: every operation fails.
+struct BrokenVerifier;
+
+impl SignatureVerifier for BrokenVerifier {
+    fn digest(&self, _alg_oid: &[u8], _data: &[u8]) -> Result<Vec<u8>, VerifyError> {
+        Err(VerifyError::Internal)
+    }
+    fn verify_signature(
+        &self,
+        _sig: &[u8],
+        _key: &[u8],
+        _pubkey: &[u8],
+        _message: &[u8],
+        _signature: &[u8],
+    ) -> Result<bool, VerifyError> {
+        Err(VerifyError::Internal)
+    }
+}
+
+#[test]
+fn backend_failure_marks_signer_unverifiable_instead_of_aborting() {
+    let buf = content_info(&signed_data_no_signed_attrs());
+    let ci =
+        ContentInfo::decode(&mut Reader::new(&buf, Config::der())).expect("ContentInfo decodes");
+    let sd: SignedData<'_> = ci.decode_content().expect("SignedData decodes");
+    let results = verify(&sd, &BrokenVerifier, None, &[]).expect("verify does not abort");
+    assert_eq!(results, vec![VerificationResult::Unverifiable]);
+}
