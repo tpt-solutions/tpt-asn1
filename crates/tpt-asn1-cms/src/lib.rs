@@ -24,6 +24,12 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+// CMS structures own `Vec`s and the signature-verification path allocates, so the
+// crate cannot build without `alloc`. Say so directly rather than failing later
+// with unresolved imports.
+#[cfg(not(feature = "alloc"))]
+compile_error!("tpt-asn1-cms requires the `alloc` feature; enable default features");
+
 #[cfg(feature = "alloc")]
 extern crate alloc;
 

@@ -46,32 +46,3 @@ pub fn encode_signed_integer(value: i64, out: &mut [u8; 9]) -> usize {
     }
     i
 }
-
-/// Compare two byte slices, returning `Ordering::Equal` only when they are
-/// byte-for-byte equal, in constant time.
-pub fn constant_time_compare(a: &[u8], b: &[u8]) -> core::cmp::Ordering {
-    if a.len() != b.len() {
-        return if a.len() < b.len() {
-            core::cmp::Ordering::Less
-        } else {
-            core::cmp::Ordering::Greater
-        };
-    }
-    let mut diff: u8 = 0;
-    let mut first_diff: i32 = -1;
-    for (i, (x, y)) in a.iter().zip(b.iter()).enumerate() {
-        let neq = (x ^ y) as i32;
-        // Record the index of the first differing byte without branching on it.
-        if first_diff < 0 && neq != 0 {
-            first_diff = i as i32;
-        }
-        diff |= neq as u8;
-    }
-    if diff == 0 {
-        core::cmp::Ordering::Equal
-    } else if first_diff >= 0 && (a[first_diff as usize] < b[first_diff as usize]) {
-        core::cmp::Ordering::Less
-    } else {
-        core::cmp::Ordering::Greater
-    }
-}

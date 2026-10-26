@@ -4,7 +4,7 @@ use tpt_asn1_core::decode::{read_sequence, read_set_of, Decode};
 use tpt_asn1_core::reader::{Config, Reader};
 use tpt_asn1_core::tag::Tag;
 use tpt_asn1_core::types::*;
-use tpt_asn1_core::util::{constant_time_compare, constant_time_eq};
+use tpt_asn1_core::util::constant_time_eq;
 use tpt_asn1_core::writer::encode_to_vec;
 use tpt_asn1_core::*;
 
@@ -196,8 +196,6 @@ fn constant_time() {
     assert!(constant_time_eq(b"abc", b"abc"));
     assert!(!constant_time_eq(b"abc", b"abd"));
     assert!(!constant_time_eq(b"abc", b"abcd"));
-    assert_eq!(constant_time_compare(b"abc", b"abd"), core::cmp::Ordering::Less);
-    assert_eq!(constant_time_compare(b"abc", b"abc"), core::cmp::Ordering::Equal);
 }
 
 #[test]

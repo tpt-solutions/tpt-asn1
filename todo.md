@@ -211,14 +211,14 @@ Line references are from a static read of the code and were not confirmed by run
 - [x] Delete the orphan `src/extensions.rs` at the repo root (diverged from the x509 crate copy)
 - [x] MSRV: `rust-version` is 1.81.0 in the manifest and all crate READMEs, matching `rust-toolchain.toml` and CI
 - [x] `cargo-deny` is checked off in Phase 1 but CI only runs `cargo audit`; add a `deny.toml` + CI job
-- [ ] Remove stale docs: `chain.rs:28-31` ("policy mappings / delta CRLs not applied"), "Phase N item N" comments in `x509/lib.rs` / `verify.rs`, CLI `validate` / `text` help saying x509 is "not yet integrated" (`cli/src/main.rs:224,325`), and the Phase 6 line mentioning a non-existent `x509/src/crypto.rs`
+- [~] Stale docs (CLI help and `chain.rs` module docs fixed; `lib.rs`/`verify.rs` "Phase N" comments remain): `chain.rs:28-31` ("policy mappings / delta CRLs not applied"), "Phase N item N" comments in `x509/lib.rs` / `verify.rs`, CLI `validate` / `text` help saying x509 is "not yet integrated" (`cli/src/main.rs:224,325`), and the Phase 6 line mentioning a non-existent `x509/src/crypto.rs`
 - [x] Reconcile stale `todo.md` checkboxes (Phase 4 lines 80-82 are done per Phase 7)
-- [ ] Rename or fix `constant_time_compare` (`util.rs:52`, branches on data and returns early on length); review call sites
+- [x] Removed `constant_time_compare` (it branched on the data and had no non-test callers); the codec test uses `constant_time_eq`
 - [x] Commit `Cargo.lock` (the workspace ships a binary and a fuzz workspace)
 - [x] Add `exclude` for PKITS data and `umbrella_corpus` so the crates.io tarballs stay small; add `documentation` and `[package.metadata.docs.rs]` (+ `docsrs` cfg) to all crates; use workspace keywords/categories consistently
 - [~] `oss-fuzz/project.yaml` repo URL fixed to match the git remote. Maintainer email is still a placeholder: needs your choice of public contact address
-- [ ] Replace `compiler/tests/debug.rs` (token dump) with real tests; strengthen the trivial cms `lib.rs` doctest
-- [ ] cms `lib.rs:29-39` modules lack the `cfg(feature = "alloc")` gates x509 has; add `--no-default-features` / `no_std` CI jobs for x509 and cms
+- [x] Replaced `compiler/tests/debug.rs` with `compiler/tests/lexer.rs` (real assertions). The trivial cms `lib.rs` doctest is still open
+- [~] cms now fails early with `compile_error!` when `alloc` is disabled, since it needs `alloc` throughout. Per-module gating is not planned. The `--no-default-features` CI job for x509 is still open
 
 ### 9.5 Missing features
 - [ ] Bundled `SignatureVerifier` backend crate (`tpt-asn1-crypto-rustcrypto`, optional `-ring`): RSA PKCS#1 v1.5 / PSS, ECDSA P-256/384/521, Ed25519, SHA-1/2 (biggest adoption blocker; the only backend today is test-only in `pkits_harness.rs`)
