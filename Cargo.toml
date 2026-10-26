@@ -8,6 +8,11 @@ members = [
     "crates/tpt-asn1-cli",
     "xtask",
 ]
+# tpt-asn1-crypto is its own workspace: RustCrypto dependencies need a newer
+# toolchain than the 1.81 MSRV pinned for this one. See its README.
+exclude = [
+    "crates/tpt-asn1-crypto",
+]
 
 [workspace.package]
 version = "0.1.0"

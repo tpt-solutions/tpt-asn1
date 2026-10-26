@@ -51,6 +51,32 @@ fn main() {
     for step in steps {
         run("cargo", &step);
     }
+    if command == "ci" {
+        // The crypto crate is its own workspace with a stable toolchain file, so its
+        // steps run from its directory for rustup to pick that toolchain.
+        let dir = "crates/tpt-asn1-crypto";
+        run_in(dir, "cargo", &["clippy", "--all-targets", "--", "-D", "warnings"]);
+        run_in(dir, "cargo", &["test"]);
+    }
+}
+
+/// Run a command from `dir`, so that directory's `rust-toolchain.toml` applies.
+fn run_in(dir: &str, program: &str, args: &[&str]) {
+    eprintln!("xtask: (in {dir}) {program} {}", args.join(" "));
+    // `cargo xtask` sets RUSTUP_TOOLCHAIN for its children, which would override
+    // the directory's own toolchain file. Clear it so that file applies.
+    let status = Command::new(program)
+        .args(args)
+        .current_dir(dir)
+        .env_remove("RUSTUP_TOOLCHAIN")
+        .status()
+        .unwrap_or_else(|e| {
+            eprintln!("xtask: failed to start `{program}`: {e}");
+            exit(1);
+        });
+    if !status.success() {
+        exit(status.code().unwrap_or(1));
+    }
 }
 
 fn run(program: &str, args: &[&str]) {

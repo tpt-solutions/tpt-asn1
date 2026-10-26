@@ -167,3 +167,24 @@ jobs:
           name: fuzz-crashes
           path: fuzz/artifacts/
           if-no-files-found: ignore
+
+  crypto:
+    name: RustCrypto backend (stable, own workspace)
+    runs-on: ubuntu-latest
+    # tpt-asn1-crypto is a separate workspace: its RustCrypto dependencies need a
+    # newer toolchain than the 1.81 pinned for the rest of the repository.
+    defaults:
+      run:
+        working-directory: crates/tpt-asn1-crypto
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/tpt-asn1-crypto
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Test
+        run: cargo test

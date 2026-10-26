@@ -225,7 +225,7 @@ Line references are from a static read of the code and were not confirmed by run
 - [~] cms now fails early with `compile_error!` when `alloc` is disabled, since it needs `alloc` throughout. Per-module gating is not planned. The `--no-default-features` CI job for x509 is still open
 
 ### 9.5 Missing features
-- [ ] Bundled `SignatureVerifier` backend crate (`tpt-asn1-crypto-rustcrypto`, optional `-ring`): RSA PKCS#1 v1.5 / PSS, ECDSA P-256/384/521, Ed25519, SHA-1/2 (biggest adoption blocker; the only backend today is test-only in `pkits_harness.rs`)
+- [x] Bundled `SignatureVerifier` backend: `crates/tpt-asn1-crypto` (RustCrypto: RSA PKCS#1 v1.5 SHA-1/256/384/512, ECDSA P-256 and P-384, Ed25519). It is its own workspace on stable because its dependencies need a newer rustc than 1.81. Verified against a PKITS trust-anchor RSA signature. Still open: RSA-PSS, DSA, and an example that runs CMS verify with it
 - [ ] Encoders for x509 / cms (only core has `Encode`): Certificate / TBSCertificate builder, CSR (PKCS#10) parse + build, CRL, OCSP request, CMS sign / encrypt
 - [ ] Derive macro crate (`tpt-asn1-derive`) as an alternative to the `build.rs` DSL path
 - [ ] Compiler: SIZE / range constraints, `...` extensibility, anonymous inline CHOICE (`codegen.rs:382`), DEFAULT beyond BOOLEAN/INTEGER/NULL (`parser.rs:326`), nested ENUMERATED, named bits, OID value assignments; consider importing standard `.asn` modules (IMPORTS)
