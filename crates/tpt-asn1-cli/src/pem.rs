@@ -29,9 +29,18 @@ fn b64_decode(input: &[u8]) -> Result<Vec<u8>, String> {
     let mut out = Vec::new();
     let mut buf: u32 = 0;
     let mut bits: u32 = 0;
+    // Padding may only appear at the very end of the data.
+    let mut padded = false;
     for &c in input {
-        if is_ws(c) || c == b'=' {
+        if is_ws(c) {
             continue;
+        }
+        if c == b'=' {
+            padded = true;
+            continue;
+        }
+        if padded {
+            return Err("base64 data after padding".to_string());
         }
         let v = b64_val(c).ok_or_else(|| format!("invalid base64 character {:?}", c as char))?;
         buf = (buf << 6) | v as u32;
@@ -40,6 +49,10 @@ fn b64_decode(input: &[u8]) -> Result<Vec<u8>, String> {
             bits -= 8;
             out.push(((buf >> bits) & 0xff) as u8);
         }
+    }
+    // Leftover bits must be zero in a canonical encoding.
+    if buf & ((1 << bits) - 1) != 0 {
+        return Err("non-zero padding bits in base64".to_string());
     }
     Ok(out)
 }

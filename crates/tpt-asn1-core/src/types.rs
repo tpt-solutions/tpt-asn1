@@ -7,7 +7,7 @@
 
 use crate::decode::{read_primitive, Decode, Encode};
 use crate::error::{Error, Result};
-use crate::reader::Reader;
+use crate::reader::{EncodingRule, Reader};
 use crate::tag::Tag;
 use crate::writer::{WriteBackend, Writer};
 
@@ -151,13 +151,17 @@ impl<'a> Enumerated<'a> {
 
     /// Decode from already-consumed-tag content bytes.
     pub fn decode_content(r: &mut Reader<'a>) -> Result<Self> {
-        Ok(Enumerated(r.read_remaining()?))
+        let bytes = r.read_remaining()?;
+        // ENUMERATED shares INTEGER's content rules, including minimality.
+        Integer::from_bytes(bytes, r.config().rule)?;
+        Ok(Enumerated(bytes))
     }
 }
 
 impl<'a> Decode<'a> for Enumerated<'a> {
     fn decode(r: &mut Reader<'a>) -> Result<Self> {
         let bytes = read_primitive(r, Tag::universal(Tag::ENUMERATED))?;
+        Integer::from_bytes(bytes, r.config().rule)?;
         Ok(Enumerated(bytes))
     }
 }
@@ -400,16 +404,30 @@ impl<'a> Iterator for OidIter<'a> {
     }
 }
 
+/// Check the content octets of an OBJECT IDENTIFIER (X.690 §8.19).
+///
+/// Each subidentifier is base-128 with the high bit as a continuation flag. The
+/// content must be non-empty, must not end mid-subidentifier, and must not start
+/// a subidentifier with `0x80`, which would be a non-minimal encoding.
+fn check_oid_content(bytes: &[u8]) -> Result<()> {
+    if bytes.is_empty() || bytes[bytes.len() - 1] & 0x80 != 0 {
+        return Err(Error::BadObjectIdentifier);
+    }
+    let mut at_subid_start = true;
+    for &b in bytes {
+        if at_subid_start && b == 0x80 {
+            return Err(Error::BadObjectIdentifier);
+        }
+        at_subid_start = b & 0x80 == 0;
+    }
+    Ok(())
+}
+
 impl<'a> ObjectIdentifier<'a> {
     /// Decode from already-consumed-tag content bytes.
     pub fn decode_content(r: &mut Reader<'a>) -> Result<Self> {
         let bytes = r.read_remaining()?;
-        if bytes.is_empty() {
-            return Err(Error::BadObjectIdentifier);
-        }
-        if bytes[0] == 0x80 {
-            return Err(Error::BadObjectIdentifier);
-        }
+        check_oid_content(bytes)?;
         Ok(ObjectIdentifier(bytes))
     }
 }
@@ -417,15 +435,7 @@ impl<'a> ObjectIdentifier<'a> {
 impl<'a> Decode<'a> for ObjectIdentifier<'a> {
     fn decode(r: &mut Reader<'a>) -> Result<Self> {
         let bytes = read_primitive(r, Tag::universal(Tag::OBJECT_IDENTIFIER))?;
-        if bytes.is_empty() {
-            return Err(Error::BadObjectIdentifier);
-        }
-        // Every subidentifier except the first must use a leading 0x80 byte if
-        // it would otherwise be empty (value 0 is fine otherwise). Light check:
-        // ensure the first subidentifier does not start with 0x80 (empty arc).
-        if bytes[0] == 0x80 {
-            return Err(Error::BadObjectIdentifier);
-        }
+        check_oid_content(bytes)?;
         Ok(ObjectIdentifier(bytes))
     }
 }
@@ -509,6 +519,7 @@ impl<'a> UtcTime<'a> {
 impl<'a> Decode<'a> for UtcTime<'a> {
     fn decode(r: &mut Reader<'a>) -> Result<Self> {
         let bytes = read_primitive(r, Tag::universal(Tag::UTC_TIME))?;
+        check_time(bytes, true, r.config().rule == EncodingRule::Der)?;
         Ok(UtcTime(bytes))
     }
 }
@@ -540,6 +551,7 @@ impl<'a> GeneralizedTime<'a> {
 impl<'a> Decode<'a> for GeneralizedTime<'a> {
     fn decode(r: &mut Reader<'a>) -> Result<Self> {
         let bytes = read_primitive(r, Tag::universal(Tag::GENERALIZED_TIME))?;
+        check_time(bytes, false, r.config().rule == EncodingRule::Der)?;
         Ok(GeneralizedTime(bytes))
     }
 }
@@ -568,6 +580,43 @@ fn take_digits(b: &[u8], i: &mut usize, n: usize) -> Result<u32> {
     Ok(v)
 }
 
+/// Number of days in `month` of `year`, honouring leap years (Gregorian).
+fn days_in_month(year: u16, month: u8) -> u8 {
+    match month {
+        2 => {
+            let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+            if leap {
+                29
+            } else {
+                28
+            }
+        }
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    }
+}
+
+/// Validate a time's content octets against its grammar, and against the
+/// stricter DER/CER rules (RFC 5280 §4.1.2.5 and X.690 §11.7/§11.8) when the
+/// active rule is DER. Errors are reported as `BadTime`.
+fn check_time(bytes: &[u8], is_utc: bool, strict: bool) -> Result<()> {
+    let dt = parse_time(bytes, is_utc)?;
+    if strict {
+        // DER: the `Z` form only (no offset), and no fraction for UTCTime.
+        if dt.tz_offset_minutes.is_some() {
+            return Err(Error::BadTime);
+        }
+        if is_utc && dt.frac_digits != 0 {
+            return Err(Error::BadTime);
+        }
+        // DER GeneralizedTime fractions must not end in a zero digit.
+        if !is_utc && dt.frac_digits != 0 && bytes.get(bytes.len() - 2) == Some(&b'0') {
+            return Err(Error::BadTime);
+        }
+    }
+    Ok(())
+}
+
 fn parse_time(bytes: &[u8], is_utc: bool) -> Result<DateTime> {
     let s = core::str::from_utf8(bytes).map_err(|_| Error::BadTime)?;
     let b = s.as_bytes();
@@ -588,7 +637,10 @@ fn parse_time(bytes: &[u8], is_utc: bool) -> Result<DateTime> {
     let hour = take_digits(b, &mut i, 2)? as u8;
     let minute = take_digits(b, &mut i, 2)? as u8;
     let second = take_digits(b, &mut i, 2)? as u8;
-    if month == 0 || month > 12 || day == 0 || day > 31 || hour > 23 || minute > 59 || second > 59 {
+    if month == 0 || month > 12 || day == 0 || day > days_in_month(year, month) {
+        return Err(Error::BadTime);
+    }
+    if hour > 23 || minute > 59 || second > 59 {
         return Err(Error::BadTime);
     }
 
@@ -606,7 +658,7 @@ fn parse_time(bytes: &[u8], is_utc: bool) -> Result<DateTime> {
             || peek(b, i) == Some(b'8')
             || peek(b, i) == Some(b'9')
         {
-            frac_digits += 1;
+            frac_digits = frac_digits.checked_add(1).ok_or(Error::BadTime)?;
             i += 1;
         }
         if frac_digits == 0 {
@@ -616,13 +668,19 @@ fn parse_time(bytes: &[u8], is_utc: bool) -> Result<DateTime> {
 
     let tz = match peek(b, i) {
         None => return Err(Error::BadTime),
-        Some(b'Z') => None,
+        Some(b'Z') => {
+            // `Z` must be the final octet: trailing data is not a valid time.
+            if i + 1 != b.len() {
+                return Err(Error::BadTime);
+            }
+            None
+        }
         Some(b'+') | Some(b'-') => {
             let sign = if peek(b, i) == Some(b'+') { 1 } else { -1 };
             i += 1;
             let oh = take_digits(b, &mut i, 2)? as i32;
             let om = take_digits(b, &mut i, 2)? as i32;
-            if i != b.len() {
+            if i != b.len() || oh > 23 || om > 59 {
                 return Err(Error::BadTime);
             }
             Some(sign * (oh * 60 + om))
@@ -670,8 +728,8 @@ fn validate_numeric(b: &[u8]) -> Result<()> {
 }
 
 fn validate_visible(b: &[u8]) -> Result<()> {
-    // VisibleString: printable ASCII excluding space (0x21..=0x7E).
-    if b.iter().all(|c| (0x21..=0x7e).contains(c)) {
+    // VisibleString (ISO 646 / ASCII graphic characters): 0x20..=0x7E, space included.
+    if b.iter().all(|c| (0x20..=0x7e).contains(c)) {
         Ok(())
     } else {
         Err(Error::BadStringType)
@@ -716,9 +774,18 @@ macro_rules! string_newtype {
 
 string_newtype!(Utf8String, Tag::UTF8_STRING, validate_utf8, "ASN.1 `UTF8String`.");
 impl<'a> Utf8String<'a> {
-    /// Interpret as `str` (validated as UTF-8 on decode).
+    /// Interpret as `str`, or `""` if the bytes are not valid UTF-8.
+    ///
+    /// Values produced by `decode` are already validated, so this only matters
+    /// for a `Utf8String` built by hand from its public field. Use
+    /// [`Utf8String::try_as_str`] to tell the two cases apart.
     pub fn as_str(&self) -> &'a str {
-        core::str::from_utf8(self.0).unwrap_or("")
+        self.try_as_str().unwrap_or("")
+    }
+
+    /// Interpret as `str`, reporting invalid UTF-8 as [`Error::BadUtf8`].
+    pub fn try_as_str(&self) -> Result<&'a str> {
+        core::str::from_utf8(self.0).map_err(|_| Error::BadUtf8)
     }
 }
 

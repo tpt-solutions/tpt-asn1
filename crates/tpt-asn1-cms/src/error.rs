@@ -27,6 +27,12 @@ pub enum Error {
     /// The encapsulated content required to verify a signature was absent
     /// (detached signature with no external content supplied).
     MissingContent,
+    /// Key unwrapping or content decryption failed. The two failures are
+    /// deliberately not distinguished.
+    DecryptionFailed,
+    /// Both embedded `eContent` and caller-supplied detached content were
+    /// present. Verifying either alone could hide a substitution, so reject.
+    AmbiguousContent,
     /// The `message-digest` signed attribute did not match the computed digest.
     MessageDigestMismatch,
     /// The cryptographic backend reported an invalid signature.
@@ -50,6 +56,8 @@ impl core::fmt::Display for Error {
             Error::UnsupportedAlgorithm => f.write_str("unsupported algorithm"),
             Error::MissingSignedAttributes => f.write_str("signer info is missing signedAttrs"),
             Error::MissingContent => f.write_str("encapsulated content is required but absent"),
+            Error::DecryptionFailed => f.write_str("content decryption failed"),
+            Error::AmbiguousContent => f.write_str("both embedded and detached content supplied"),
             Error::MessageDigestMismatch => f.write_str("message-digest attribute mismatch"),
             Error::VerificationFailed => f.write_str("signature verification failed"),
             Error::UnexpectedStructure => f.write_str("unexpected CMS structure"),

@@ -131,15 +131,17 @@ impl Tag {
         self.class == Class::Universal && self.number == number
     }
 
-    /// The first tag byte (short form). Panics in const-eval if `number >= 31`
-    /// because the high-tag-number form requires multiple bytes.
-    pub fn to_byte(self) -> u8 {
+    /// The single identifier octet (short form), or `None` if `number >= 31`,
+    /// since the high-tag-number form needs multiple octets (use `encode()`).
+    pub fn to_byte(self) -> Option<u8> {
         if self.number >= 31 {
-            panic!("tag number >= 31 requires high-tag-number form; use encode()");
+            return None;
         }
-        (self.class.to_bits() << 6)
-            | if self.constructed { 0x20 } else { 0x00 }
-            | (self.number as u8 & 0x1f)
+        Some(
+            (self.class.to_bits() << 6)
+                | if self.constructed { 0x20 } else { 0x00 }
+                | (self.number as u8 & 0x1f),
+        )
     }
 
     /// Encode the tag into `w`. Supports the multi-byte high-tag-number form.
@@ -180,8 +182,14 @@ fn encode_high_tag_number<B: WriteBackend>(mut number: u32, w: &mut Writer<B>) -
 fn decode_high_tag_number(r: &mut Reader<'_>) -> Result<u32> {
     let mut number: u32 = 0;
     let mut shifted = false;
+    let mut first = true;
     loop {
         let b = r.read_u8()?;
+        // A leading 0x80 octet pads the number and is never minimal (X.690 §8.1.2.4.2).
+        if first && b == 0x80 {
+            return Err(Error::InvalidTag);
+        }
+        first = false;
         if number > (u32::MAX >> 7) {
             return Err(Error::UnsupportedTagNumber(u32::MAX));
         }

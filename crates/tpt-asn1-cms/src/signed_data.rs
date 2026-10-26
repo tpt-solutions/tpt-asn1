@@ -96,50 +96,26 @@ impl<'a> Decode<'a> for SignedData<'a> {
             let mut certificates: alloc::vec::Vec<Any<'a>> = alloc::vec::Vec::new();
             let mut crls: alloc::vec::Vec<Any<'a>> = alloc::vec::Vec::new();
 
-            let _start = inner.position();
-            let (tag, _, value) = inner.read_tlv()?;
-            if tag == Tag::context(true, 0) {
-                certificates = split_any_set(value)?;
-                let _start2 = inner.position();
-                let (tag2, _, value2) = inner.read_tlv()?;
-                if tag2 == Tag::context(true, 1) {
-                    crls = split_any_set(value2)?;
-                } else {
-                    // Not crls: this is signerInfos (SET). Re-parse as SET OF SignerInfo.
-                    let signer_infos = decode_signer_infos(value2)?;
-                    return Ok(SignedData {
-                        version,
-                        digest_algorithms,
-                        e_content_type,
-                        e_content,
-                        certificates,
-                        crls,
-                        signer_infos,
-                    });
-                }
-            } else if tag == Tag::context(true, 1) {
-                crls = split_any_set(value)?;
-            } else {
-                // Neither certificates nor crls: this TLV is signerInfos.
-                let signer_infos = decode_signer_infos(value)?;
-                return Ok(SignedData {
-                    version,
-                    digest_algorithms,
-                    e_content_type,
-                    e_content,
-                    certificates,
-                    crls,
-                    signer_infos,
-                });
+            // Caller's config, so BER (indefinite-length) input stays BER in
+            // every nested structure.
+            let cfg = *inner.config();
+            // certificates [0] and crls [1] are optional, IMPLICIT, and constructed.
+            if inner.peek_tag() == Ok(Tag::context(true, 0)) {
+                let (_, _, value) = inner.read_tlv()?;
+                certificates = split_any_set(value, cfg)?;
+            }
+            if inner.peek_tag() == Ok(Tag::context(true, 1)) {
+                let (_, _, value) = inner.read_tlv()?;
+                crls = split_any_set(value, cfg)?;
             }
 
-            // signerInfos ::= SET OF SignerInfo
+            // signerInfos ::= SET OF SignerInfo (required)
             let signer_infos = {
                 let (st, _, sval) = inner.read_tlv()?;
-                if !st.is_universal(Tag::SET) {
+                if st != Tag::universal_constructed(Tag::SET) {
                     return Err(Error::UnexpectedStructure.into());
                 }
-                decode_signer_infos(sval)?
+                decode_signer_infos(sval, cfg)?
             };
 
             Ok(SignedData {
@@ -179,8 +155,11 @@ fn decode_encap_content_info<'a>(
 }
 
 /// Split a SET OF content into its constituent `Any` elements.
-fn split_any_set(content: &[u8]) -> Result<alloc::vec::Vec<Any<'_>>> {
-    let mut r = Reader::new(content, tpt_asn1_core::reader::Config::ber());
+fn split_any_set(
+    content: &[u8],
+    config: tpt_asn1_core::reader::Config,
+) -> Result<alloc::vec::Vec<Any<'_>>> {
+    let mut r = Reader::new(content, config);
     let mut out = alloc::vec::Vec::new();
     while !r.is_empty() {
         out.push(Any::decode(&mut r)?);
@@ -189,8 +168,11 @@ fn split_any_set(content: &[u8]) -> Result<alloc::vec::Vec<Any<'_>>> {
 }
 
 /// Decode a `SET OF SignerInfo` from its raw content bytes.
-fn decode_signer_infos(content: &[u8]) -> Result<alloc::vec::Vec<SignerInfo<'_>>> {
-    let mut r = Reader::new(content, tpt_asn1_core::reader::Config::der());
+fn decode_signer_infos(
+    content: &[u8],
+    config: tpt_asn1_core::reader::Config,
+) -> Result<alloc::vec::Vec<SignerInfo<'_>>> {
+    let mut r = Reader::new(content, config);
     let mut out = alloc::vec::Vec::new();
     while !r.is_empty() {
         out.push(SignerInfo::decode(&mut r)?);

@@ -367,11 +367,6 @@ fn run_case(case: &Case) -> Result<(), String> {
 /// any failure missing from this list, and on any entry that now passes, so the list
 /// is pruned as each gap is closed.
 const KNOWN_FAILURES: &[&str] = &[
-    // inhibitPolicyMapping (PKITS §4.11): self-issued certificates and the skip count.
-    "4.11.11 InvalidSelfIssuedinhibitPolicyMappingTest11EE rejection",
-    "4.11.9 InvalidSelfIssuedinhibitPolicyMappingTest9EE rejection",
-    // inhibitAnyPolicy (PKITS §4.12): anyPolicy through a self-issued rollover.
-    "4.12.9 ValidSelfIssuedinhibitAnyPolicyTest9EE valid",
     // CRL signing by a separate CRL-only certificate (PKITS §4.4).
     "4.4.19 ValidSeparateCertificateandCRLKeysTest19EE valid",
 ];

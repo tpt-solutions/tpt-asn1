@@ -14,10 +14,10 @@ use crate::tag::Tag;
 /// A write backend abstracts over the destination of encoded bytes so that the
 /// same encoding logic works for a stack buffer or a growable vector.
 pub trait WriteBackend {
-    /// Append a single byte.
-    fn put(&mut self, b: u8);
-    /// Append a slice of bytes.
-    fn put_slice(&mut self, s: &[u8]);
+    /// Append a single byte. Fails if the destination cannot hold it.
+    fn put(&mut self, b: u8) -> Result<()>;
+    /// Append a slice of bytes. Fails if the destination cannot hold it.
+    fn put_slice(&mut self, s: &[u8]) -> Result<()>;
 }
 
 /// A [`WriteBackend`] backed by a growable vector (requires `alloc`).
@@ -26,33 +26,41 @@ pub struct VecBackend(pub alloc::vec::Vec<u8>);
 
 #[cfg(feature = "alloc")]
 impl WriteBackend for VecBackend {
-    fn put(&mut self, b: u8) {
+    fn put(&mut self, b: u8) -> Result<()> {
         self.0.push(b);
+        Ok(())
     }
-    fn put_slice(&mut self, s: &[u8]) {
+    fn put_slice(&mut self, s: &[u8]) -> Result<()> {
         self.0.extend_from_slice(s);
+        Ok(())
     }
 }
 
-/// A [`WriteBackend`] backed by a fixed slice. Writing past the end is a
-/// silent no-op (the encoder reports overflow via `as_written`/`position`).
+/// A [`WriteBackend`] backed by a fixed slice. Writing past the end returns
+/// [`Error::OutputTooSmall`] and leaves the buffer and position unchanged.
 pub struct SliceBackend<'a> {
     buf: &'a mut [u8],
     pos: usize,
 }
 
 impl WriteBackend for SliceBackend<'_> {
-    fn put(&mut self, b: u8) {
-        if self.pos < self.buf.len() {
-            self.buf[self.pos] = b;
-            self.pos += 1;
+    fn put(&mut self, b: u8) -> Result<()> {
+        if self.pos >= self.buf.len() {
+            return Err(crate::error::Error::OutputTooSmall);
         }
+        self.buf[self.pos] = b;
+        self.pos += 1;
+        Ok(())
     }
-    fn put_slice(&mut self, s: &[u8]) {
-        if self.pos + s.len() <= self.buf.len() {
-            self.buf[self.pos..self.pos + s.len()].copy_from_slice(s);
-            self.pos += s.len();
-        }
+    fn put_slice(&mut self, s: &[u8]) -> Result<()> {
+        let end = self
+            .pos
+            .checked_add(s.len())
+            .filter(|&end| end <= self.buf.len())
+            .ok_or(crate::error::Error::OutputTooSmall)?;
+        self.buf[self.pos..end].copy_from_slice(s);
+        self.pos = end;
+        Ok(())
     }
 }
 
@@ -94,14 +102,12 @@ impl Writer<VecBackend> {
 impl<B: WriteBackend> Writer<B> {
     /// Write a single byte.
     pub fn write_u8(&mut self, b: u8) -> Result<()> {
-        self.backend.put(b);
-        Ok(())
+        self.backend.put(b)
     }
 
     /// Write a slice of bytes.
     pub fn write_bytes(&mut self, b: &[u8]) -> Result<()> {
-        self.backend.put_slice(b);
-        Ok(())
+        self.backend.put_slice(b)
     }
 
     /// Encode a tag.

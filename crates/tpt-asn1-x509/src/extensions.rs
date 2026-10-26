@@ -72,6 +72,11 @@ impl<'a> Extensions<'a> {
                 if ext.critical && !is_known_extension(&ext.extn_id) {
                     return Err(Error::UnknownCriticalExtension);
                 }
+                // RFC 5280 §4.2: a certificate MUST NOT include more than one
+                // instance of a particular extension.
+                if list.iter().any(|e: &Extension<'_>| e.extn_id == ext.extn_id) {
+                    return Err(Error::Custom("duplicate certificate extension"));
+                }
                 list.push(ext);
             }
             Ok(list)
@@ -239,6 +244,11 @@ impl<'a> Decode<'a> for Extension<'a> {
                 let any = Any::decode(inner)?;
                 if any.tag.is_universal(Tag::BOOLEAN) {
                     let b = any.decode_as::<Boolean>()?.0;
+                    // DER omits `critical` when it is FALSE (DEFAULT FALSE), so an
+                    // explicit FALSE is non-canonical.
+                    if !b && inner.config().rule == tpt_asn1_core::reader::EncodingRule::Der {
+                        return Err(Error::Custom("explicit critical FALSE is not DER"));
+                    }
                     let value_any = Any::decode(inner)?;
                     (b, value_any.decode_as::<OctetString<'_>>()?.0)
                 } else {
@@ -458,12 +468,11 @@ impl<'a> Decode<'a> for GeneralName<'a> {
         let any = Any::decode(r)?;
         let t = any.tag;
         if t == Tag::context(true, 0) {
+            // `[0] IMPLICIT OtherName`: the content octets are the type-id OID
+            // followed by the `[0] EXPLICIT` value. There is no SEQUENCE header.
             let mut sub = Reader::new(any.value, *r.config());
-            let (type_id, value) = read_sequence(&mut sub, |s| {
-                let type_id = ObjectIdentifier::decode(s)?;
-                let value = Any::decode(s)?;
-                Ok((type_id, value))
-            })?;
+            let type_id = ObjectIdentifier::decode(&mut sub)?;
+            let value = Any::decode(&mut sub)?;
             Ok(GeneralName::OtherName { type_id, value })
         } else if t == Tag::context(false, 1) {
             Ok(GeneralName::Rfc822Name(any.value))
@@ -478,8 +487,10 @@ impl<'a> Decode<'a> for GeneralName<'a> {
         } else if t == Tag::context(false, 7) {
             Ok(GeneralName::IpAddress(any.value))
         } else if t == Tag::context(false, 8) {
+            // `[8] IMPLICIT OBJECT IDENTIFIER`: the content octets are the OID
+            // content, with no universal tag or length of its own.
             let mut sub = Reader::new(any.value, *r.config());
-            Ok(GeneralName::RegisteredId(ObjectIdentifier::decode(&mut sub)?))
+            Ok(GeneralName::RegisteredId(ObjectIdentifier::decode_content(&mut sub)?))
         } else {
             Ok(GeneralName::Other { tag_number: t.number, bytes: any.value })
         }
@@ -818,15 +829,17 @@ fn decode_subtrees(
             let mut maximum = None;
             while !st.is_empty() {
                 let f = Any::decode(st)?;
+                // minimum/maximum are IMPLICIT INTEGER, so the content octets
+                // are the integer value itself.
                 if f.tag == Tag::context(false, 0) {
                     let mut mr = Reader::new(f.value, config);
-                    minimum = Integer::decode(&mut mr)?
+                    minimum = Integer::decode_content(&mut mr)?
                         .as_u64()
                         .ok_or(Error::Custom("minimum too large"))?;
                 } else if f.tag == Tag::context(false, 1) {
                     let mut mr = Reader::new(f.value, config);
                     maximum = Some(
-                        Integer::decode(&mut mr)?
+                        Integer::decode_content(&mut mr)?
                             .as_u64()
                             .ok_or(Error::Custom("maximum too large"))?,
                     );
@@ -949,12 +962,12 @@ pub mod crl_reason {
     pub const CESSATION_OF_OPERATION: u8 = 5;
     /// `certificateHold` — 6
     pub const CERTIFICATE_HOLD: u8 = 6;
-    /// `privilegeWithdrawn` — 7
-    pub const PRIVILEGE_WITHDRAWN: u8 = 7;
-    /// `aACompromise` — 8
-    pub const AA_COMPROMISE: u8 = 8;
-    /// `removeFromCRL` — 9
-    pub const REMOVE_FROM_CRL: u8 = 9;
+    /// `removeFromCRL` — 8
+    pub const REMOVE_FROM_CRL: u8 = 8;
+    /// `privilegeWithdrawn` — 9
+    pub const PRIVILEGE_WITHDRAWN: u8 = 9;
+    /// `aACompromise` — 10
+    pub const AA_COMPROMISE: u8 = 10;
 }
 
 /// `ReasonFlags` — a `BIT STRING` whose named bits are the CRL reason codes

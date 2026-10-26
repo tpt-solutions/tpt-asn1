@@ -103,8 +103,21 @@ impl<'a> Decode<'a> for Certificate<'a> {
     fn decode(r: &mut Reader<'a>) -> Result<Self> {
         read_sequence(r, |inner| {
             let tbs_any = Any::decode(inner)?;
+            if !tbs_any.tag.is_universal(Tag::SEQUENCE) || !tbs_any.tag.constructed {
+                return Err(tpt_asn1_core::error::Error::UnexpectedTag {
+                    expected: Tag::universal(Tag::SEQUENCE),
+                    actual: tbs_any.tag,
+                });
+            }
             let tbs = decode_tbs(tbs_any.value, *inner.config())?;
             let signature_algorithm = AlgorithmIdentifier::decode(inner)?;
+            // RFC 5280 §4.1.1.2: the signature algorithm in the TBS must match the
+            // outer one, since a verifier may use either.
+            if tbs.signature != signature_algorithm {
+                return Err(tpt_asn1_core::error::Error::Custom(
+                    "tbsCertificate signature algorithm differs from certificate",
+                ));
+            }
             let signature_value = BitString::decode(inner)?;
             Ok(Certificate { tbs, signature_algorithm, signature_value, tbs_der: tbs_any.full })
         })
@@ -113,6 +126,8 @@ impl<'a> Decode<'a> for Certificate<'a> {
 
 fn decode_tbs(content: &[u8], config: Config) -> Result<TBSCertificate<'_>> {
     let mut r = Reader::new(content, config);
+    // version [0] EXPLICIT Version DEFAULT v1. Only v1, v2 and v3 exist, which
+    // are encoded as 0, 1 and 2.
     let mut version = 1u8;
     if r.peek_tag() == Ok(Tag::context(true, 0)) {
         let v_any = Any::decode(&mut r)?;
@@ -120,7 +135,10 @@ fn decode_tbs(content: &[u8], config: Config) -> Result<TBSCertificate<'_>> {
         let v = Integer::decode(&mut sub)?
             .as_u64()
             .ok_or(tpt_asn1_core::error::Error::Custom("version too large"))?;
-        version = (v as u8).saturating_add(1);
+        version = match v {
+            0..=2 => v as u8 + 1,
+            _ => return Err(tpt_asn1_core::error::Error::Custom("unknown certificate version")),
+        };
     }
     let serial_number = Integer::decode(&mut r)?;
     let signature = AlgorithmIdentifier::decode(&mut r)?;
@@ -134,10 +152,19 @@ fn decode_tbs(content: &[u8], config: Config) -> Result<TBSCertificate<'_>> {
         Any::decode(&mut r)?;
     }
 
+    // extensions [3] EXPLICIT Extensions exist only in v3 certificates.
     let mut extensions = Extensions::empty();
     if r.peek_tag() == Ok(Tag::context(true, 3)) {
+        if version != 3 {
+            return Err(tpt_asn1_core::error::Error::Custom(
+                "extensions present in a non-v3 certificate",
+            ));
+        }
         let e_any = Any::decode(&mut r)?;
         extensions = Extensions::from_content(e_any.value, config)?;
+    }
+    if !r.is_empty() {
+        return Err(tpt_asn1_core::error::Error::TrailingData);
     }
 
     Ok(TBSCertificate {

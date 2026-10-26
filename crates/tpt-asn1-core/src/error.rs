@@ -12,6 +12,8 @@ pub type Result<T> = core::result::Result<T, Error>;
 pub enum Error {
     /// The input ended before a complete TLV could be read.
     Truncated,
+    /// The output buffer was too small to hold the encoded value.
+    OutputTooSmall,
     /// The input contained bytes after the expected end of a value.
     TrailingData,
     /// A tag byte could not be interpreted.
@@ -61,6 +63,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Truncated => f.write_str("truncated input"),
+            Error::OutputTooSmall => f.write_str("output buffer too small"),
             Error::TrailingData => f.write_str("trailing data after value"),
             Error::InvalidTag => f.write_str("invalid tag"),
             Error::InvalidLength => f.write_str("invalid length encoding"),

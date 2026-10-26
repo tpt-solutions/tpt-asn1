@@ -142,14 +142,36 @@ pub fn decrypt<B: EnvelopeBackend>(
     let recipient = ed.recipient_infos.get(recipient_index).ok_or(Error::UnexpectedStructure)?;
     let ktri = recipient.as_key_trans().ok_or(Error::UnsupportedAlgorithm)?;
 
-    let cek = backend.rsa_unwrap(ktri.encrypted_key, private_key_der)?;
     let encrypted_content =
         ed.encrypted_content_info.encrypted_content.ok_or(Error::MissingContent)?;
-    backend.decrypt_content(
-        ed.encrypted_content_info.content_enc_alg_bytes(),
-        &cek,
-        encrypted_content.0,
-    )
+
+    // A failed key unwrap and a failed content decryption return the same error,
+    // so the caller cannot use the difference as a padding oracle (Bleichenbacher).
+    // RFC 3218 also suggests substituting a random CEK; this crate has no RNG, so
+    // that substitution is not done.
+    let mut cek = backend
+        .rsa_unwrap(ktri.encrypted_key, private_key_der)
+        .map_err(|_| Error::DecryptionFailed)?;
+    let plaintext = backend
+        .decrypt_content(
+            ed.encrypted_content_info.content_enc_alg_bytes(),
+            &cek,
+            encrypted_content.0,
+        )
+        .map_err(|_| Error::DecryptionFailed);
+    wipe(&mut cek);
+    plaintext
+}
+
+/// Overwrite `buf` with zeros. This is best effort: the compiler fence stops
+/// the optimizer from removing the stores, but copies made by the backend are
+/// outside this function's control.
+#[cfg(feature = "alloc")]
+fn wipe(buf: &mut [u8]) {
+    for b in buf.iter_mut() {
+        *b = 0;
+    }
+    core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
 }
 
 /// `DigestedData` (RFC 5652 §7) — a content type + its message digest.

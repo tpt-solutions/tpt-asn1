@@ -39,10 +39,13 @@ impl<'a> RevokedCertificate<'a> {
     }
 
     /// Returns `true` if `now` is on or after the revocation date.
+    ///
+    /// Fails closed: if the revocation date cannot be parsed, the entry is
+    /// treated as revoked, since its status cannot be established.
     pub fn is_revoked_at(&self, now: UnixTime) -> bool {
         match self.revocation_date.to_unix() {
             Ok(t) => t <= now,
-            Err(_) => false,
+            Err(_) => true,
         }
     }
 }
@@ -88,9 +91,12 @@ impl<'a> Decode<'a> for CertificateList<'a> {
 
             // version OPTIONAL (INTEGER, v2 == 1).
             if r2.peek_tag() == Ok(Tag::universal(Tag::INTEGER)) {
-                let _version = Integer::decode(&mut r2)?;
+                // Only v2 (encoded as 1) is defined for CRLs.
+                if Integer::decode(&mut r2)?.as_u64() != Some(1) {
+                    return Err(tpt_asn1_core::error::Error::Custom("unknown CRL version"));
+                }
             }
-            let _tbs_signature_algorithm = AlgorithmIdentifier::decode(&mut r2)?;
+            let tbs_signature_algorithm = AlgorithmIdentifier::decode(&mut r2)?;
             let issuer = Name::decode(&mut r2)?;
             let this_update = Time::decode(&mut r2)?;
             let next_update = if !r2.is_empty()
@@ -133,8 +139,17 @@ impl<'a> Decode<'a> for CertificateList<'a> {
                 let ext_any = Any::decode(&mut r2)?;
                 crl_extensions = Extensions::from_crl_content(ext_any.value, config)?;
             }
+            if !r2.is_empty() {
+                return Err(tpt_asn1_core::error::Error::TrailingData);
+            }
 
             let signature_algorithm = AlgorithmIdentifier::decode(inner)?;
+            // RFC 5280 §5.1.1.2: the TBS and outer signature algorithms must match.
+            if tbs_signature_algorithm != signature_algorithm {
+                return Err(tpt_asn1_core::error::Error::Custom(
+                    "tbsCertList signature algorithm differs from CRL",
+                ));
+            }
             let signature_value = BitString::decode(inner)?;
             Ok(CertificateList {
                 issuer,

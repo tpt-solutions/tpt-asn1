@@ -157,12 +157,20 @@ fn signed_data_no_signed_attrs() -> Vec<u8> {
 }
 
 fn signed_data_with_signed_attrs() -> Vec<u8> {
+    signed_data_with_attrs(ID_DATA, false)
+}
+
+/// Like [`signed_data_with_signed_attrs`], but with a chosen `content-type`
+/// value and optionally two `message-digest` values in the same attribute.
+fn signed_data_with_attrs(content_type: &[u8], duplicate_digest: bool) -> Vec<u8> {
     let content_buf = b"hello";
     let digest = mock_digest(content_buf);
 
     // signedAttrs content: SET OF { content-type, message-digest } (DER order).
-    let attr_ct = seq!(oid(oid::ATTR_CONTENT_TYPE), set!(oid(ID_DATA)));
-    let attr_md = seq!(oid(oid::ATTR_MESSAGE_DIGEST), set!(octet(&digest)));
+    let attr_ct = seq!(oid(oid::ATTR_CONTENT_TYPE), set!(oid(content_type)));
+    let md_values =
+        if duplicate_digest { [octet(&digest), octet(&digest)].concat() } else { octet(&digest) };
+    let attr_md = seq!(oid(oid::ATTR_MESSAGE_DIGEST), set!(&md_values));
     let set_content = [attr_ct.clone(), attr_md.clone()].concat();
     let tbs = set!(&set_content);
 
@@ -241,6 +249,25 @@ fn verify_signed_data_with_signed_attrs() {
 }
 
 #[test]
+fn content_type_attribute_must_match_econtenttype() {
+    // eContentType is id-data, but the signed content-type names SHA-256.
+    let buf = content_info(&signed_data_with_attrs(SHA256, false));
+    let ci =
+        ContentInfo::decode(&mut Reader::new(&buf, Config::der())).expect("ContentInfo decodes");
+    let sd: SignedData<'_> = ci.decode_content().expect("SignedData decodes");
+    assert!(verify(&sd, &MockVerifier, None, &[]).is_err());
+}
+
+#[test]
+fn duplicate_message_digest_is_rejected() {
+    let buf = content_info(&signed_data_with_attrs(ID_DATA, true));
+    let ci =
+        ContentInfo::decode(&mut Reader::new(&buf, Config::der())).expect("ContentInfo decodes");
+    let sd: SignedData<'_> = ci.decode_content().expect("SignedData decodes");
+    assert!(verify(&sd, &MockVerifier, None, &[]).is_err());
+}
+
+#[test]
 fn verify_detached_missing_content() {
     // Build a SignedData with no eContent, then verify without external content.
     let buf = content_info(&signed_data_no_signed_attrs());
@@ -270,4 +297,68 @@ fn decode_enveloped_data_key_transport() {
     let kt = ed.recipient_infos[0].as_key_trans().expect("is KeyTrans");
     assert_eq!(kt.encrypted_key, &[0x11, 0x22, 0x33]);
     assert_eq!(ed.encrypted_content_info.encrypted_content.unwrap().0, b"cipher");
+}
+
+/// Backend whose RSA unwrap and content decryption can each be made to fail.
+struct EnvelopeMock {
+    unwrap_fails: bool,
+    decrypt_fails: bool,
+}
+
+impl tpt_asn1_cms::recipient_info::EnvelopeBackend for EnvelopeMock {
+    fn rsa_unwrap(
+        &self,
+        _encrypted_key: &[u8],
+        _private_key_der: &[u8],
+    ) -> tpt_asn1_cms::error::Result<Vec<u8>> {
+        if self.unwrap_fails {
+            Err(tpt_asn1_cms::error::Error::VerificationFailed)
+        } else {
+            Ok(vec![0x42; 32])
+        }
+    }
+
+    fn decrypt_content(
+        &self,
+        _content_enc_alg: &[u8],
+        _cek: &[u8],
+        _encrypted_content: &[u8],
+    ) -> tpt_asn1_cms::error::Result<Vec<u8>> {
+        if self.decrypt_fails {
+            Err(tpt_asn1_cms::error::Error::UnexpectedStructure)
+        } else {
+            Ok(b"plain".to_vec())
+        }
+    }
+}
+
+fn key_transport_enveloped_data() -> Vec<u8> {
+    let version = integer(&[0x00]);
+    let ktri = seq!(integer(&[0x00]), signer_id(), seq!(oid(RSA_ENC)), octet(&[0x11, 0x22, 0x33]),);
+    let recipient_infos = set!(ktri);
+    let eci = seq!(oid(ID_DATA), seq!(oid(SHA256)), tlv(0x80, b"cipher"));
+    content_info_of(ID_ENVELOPED_DATA, &seq!(version, recipient_infos, eci))
+}
+
+#[test]
+fn decrypt_succeeds_with_working_backend() {
+    let buf = key_transport_enveloped_data();
+    let ci = ContentInfo::decode(&mut Reader::new(&buf, Config::der())).expect("decodes");
+    let ed: EnvelopedData<'_> = ci.decode_content().expect("EnvelopedData decodes");
+    let mock = EnvelopeMock { unwrap_fails: false, decrypt_fails: false };
+    let plain = tpt_asn1_cms::enveloped_data::decrypt(&ed, 0, b"key", &mock).expect("decrypts");
+    assert_eq!(plain, b"plain");
+}
+
+#[test]
+fn unwrap_and_decrypt_failures_are_indistinguishable() {
+    let buf = key_transport_enveloped_data();
+    let ci = ContentInfo::decode(&mut Reader::new(&buf, Config::der())).expect("decodes");
+    let ed: EnvelopedData<'_> = ci.decode_content().expect("EnvelopedData decodes");
+    let unwrap_fail = EnvelopeMock { unwrap_fails: true, decrypt_fails: false };
+    let decrypt_fail = EnvelopeMock { unwrap_fails: false, decrypt_fails: true };
+    let a = tpt_asn1_cms::enveloped_data::decrypt(&ed, 0, b"key", &unwrap_fail);
+    let b = tpt_asn1_cms::enveloped_data::decrypt(&ed, 0, b"key", &decrypt_fail);
+    assert_eq!(a, Err(tpt_asn1_cms::error::Error::DecryptionFailed));
+    assert_eq!(b, Err(tpt_asn1_cms::error::Error::DecryptionFailed));
 }

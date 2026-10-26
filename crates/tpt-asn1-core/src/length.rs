@@ -42,7 +42,9 @@ impl Length {
                 if *n < 0x80 {
                     w.write_u8(*n as u8)
                 } else {
-                    let mut buf = [0u8; 5];
+                    // Big enough for any `usize` length, which is at most
+                    // `size_of::<usize>()` octets in the long form.
+                    let mut buf = [0u8; core::mem::size_of::<usize>()];
                     let mut i = buf.len();
                     let mut v = *n;
                     while v > 0 {

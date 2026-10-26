@@ -87,7 +87,14 @@ fn check_type_refs(ty: &Type, types: &[TypeAssignment]) -> Result<()> {
             }
         }
         Type::SequenceOf(inner) | Type::SetOf(inner) => check_type_refs(inner, types)?,
-        _ => {}
+        // Codegen needs every compound type to have a name. Rejecting inline
+        // ones here keeps the `unreachable!` arms in codegen truly unreachable.
+        Type::Sequence(_) | Type::Set(_) | Type::Choice(_) => {
+            return Err(CompilerError::codegen(
+                "anonymous inline SEQUENCE/SET/CHOICE is not supported; give the type a name",
+            ));
+        }
+        Type::Builtin(_) => {}
     }
     Ok(())
 }

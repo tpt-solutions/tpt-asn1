@@ -240,22 +240,30 @@ fn find_eoc_inner(
             return Err(Error::InvalidLength);
         } else {
             let num = (len_byte & 0x7f) as usize;
-            if len_pos + 1 + num > input.len() {
+            // A length wider than `usize` cannot describe a slice we could
+            // hold, so reject it before shifting bits out of the value.
+            if num > core::mem::size_of::<usize>() {
+                return Err(Error::InvalidLength);
+            }
+            let len_end =
+                len_pos.checked_add(1).and_then(|p| p.checked_add(num)).ok_or(Error::Truncated)?;
+            if len_end > input.len() {
                 return Err(Error::Truncated);
             }
             let mut v: usize = 0;
             for i in 0..num {
                 v = (v << 8) | input[len_pos + 1 + i] as usize;
             }
-            (Some(v), len_pos + 1 + num)
+            (Some(v), len_end)
         };
 
         match value_len {
             Some(n) => {
-                if after_header + n > input.len() {
+                let end = after_header.checked_add(n).ok_or(Error::Truncated)?;
+                if end > input.len() {
                     return Err(Error::Truncated);
                 }
-                pos = after_header + n;
+                pos = end;
             }
             None => {
                 // Indefinite: descend to find this element's own EOC.

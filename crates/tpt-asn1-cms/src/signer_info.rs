@@ -59,27 +59,15 @@ impl<'a> SignedAttributes<'a> {
     /// Re-encode the attributes as a canonical DER `SET` (tag `0x31`), which is
     /// the exact byte string a signature is computed over when `signedAttrs`
     /// are present.
-    pub fn der(&self) -> alloc::vec::Vec<u8> {
-        let mut out = alloc::vec::Vec::with_capacity(self.raw.len() + 8);
-        out.push(Tag::universal_constructed(Tag::SET).to_byte()); // 0x31
-        let len = self.raw.len();
-        if len < 0x80 {
-            out.push(len as u8);
-        } else {
-            let mut n = len;
-            let mut tmp = [0u8; 5];
-            let mut i = tmp.len();
-            while n > 0 {
-                i -= 1;
-                tmp[i] = (n & 0xff) as u8;
-                n >>= 8;
-            }
-            let count = (tmp.len() - i) as u8;
-            out.push(0x80 | count);
-            out.extend_from_slice(&tmp[i..]);
-        }
-        out.extend_from_slice(self.raw);
-        out
+    pub fn der(&self) -> Result<alloc::vec::Vec<u8>> {
+        use tpt_asn1_core::length::Length;
+        use tpt_asn1_core::writer::Writer;
+
+        let mut w = Writer::new_vec();
+        w.write_tag(Tag::universal_constructed(Tag::SET))?;
+        w.write_length(Length::Definite(self.raw.len()))?;
+        w.write_bytes(self.raw)?;
+        Ok(w.into_vec())
     }
 
     /// Find a signed attribute by OID bytes.

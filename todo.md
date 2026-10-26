@@ -122,7 +122,7 @@ Release model: single v1.0 (phases below are tracking buckets, not separate publ
   - [x] CRL revocation (RFC 5280 §6.3.3): issuer and indirect (`cRLIssuer`) matching, distribution-point and issuing-point scope, reason coverage, and CRL signers from the path or the candidate pool; delta CRLs complement their base CRL (matching CRL number, `removeFromCRL` clears a base entry)
   - [x] Test-only signature backend in the harness: RSA PKCS#1 v1.5 (SHA-1/256/384/512) and DSA (SHA-1/256), with DSA parameter inheritance
   - [x] Data-driven harness `tests/pkits_harness.rs` as a regression gate. It fails on any new failure and on any listed failure that starts passing. It runs as its own blocking `pkits` job in `.github/workflows/ci.yml`, and also in the workspace test job.
-  - [ ] Close the 4 known failures listed in `tests/pkits_harness.rs`: inhibitPolicyMapping §4.11.9 and §4.11.11 (the self-issued count, where §4.11.7 requires the opposite), inhibitAnyPolicy §4.12.9 (anyPolicy through a self-issued rollover), and a separate CRL-only certificate signing a CRL under the issuing CA name (§4.4.19)
+  - [ ] Close the known failures listed in `tests/pkits_harness.rs`. **Now 246 of 247** — §4.11.9, §4.11.11 and §4.12.9 are closed. Remaining: a separate CRL-only certificate signing a CRL under the issuing CA name (§4.4.19)
   - [ ] Document any officially out-of-scope subset with rationale (none identified yet)
 - [x] Formal gate: 100% of Cisco Umbrella Top 1M parsed without panic (acceptance criteria #2) —
       unblocked: network access confirmed working from this environment. Downloaded the real
@@ -164,3 +164,96 @@ Release model: single v1.0 (phases below are tracking buckets, not separate publ
   now confirmed available in this environment, so cross-checking against `openssl asn1parse` for
   the formal byte-for-byte parity gate is unblocked but not yet done.
 - **crates.io** namespace reservation: manual account action; cannot be performed here.
+
+## Phase 9 — Post-Review Hardening, Features & Adoption (added from platform review)
+Line references are from a static read of the code and were not confirmed by running it. Write a failing test first for each bug to confirm it.
+
+### 9.1 Security-relevant bugs (fail-open / DoS) — do first
+- [x] Name constraints bypass: `extensions.rs` `GeneralName::decode` now reads `otherName [0]` / `registeredId [8]` as IMPLICIT content. Regression tests in `x509/tests/extension_decode.rs`
+- [x] `NameConstraints` dropped on parse error: `minimum`/`maximum` now use `Integer::decode_content`. Regression test `name_constraints_with_minimum_decodes`
+- [x] Replace the `.ok()` fail-open pattern in path validation with `PathError::MalformedExtension` (BasicConstraints, KeyUsage, NameConstraints, SAN, CRL DP, CRL issuer KeyUsage). Remaining `.ok()` sites are non-security reads (`crl.reason()`, `is_ca`, SKI) that fail closed or only affect reporting
+- [x] BER hang/panic: `find_eoc_inner` caps the length-octet count at `size_of::<usize>()` and uses checked arithmetic. Regression tests in `core/tests/hostile_ber.rs`
+- [x] Exponential path search: `MAX_SEARCH_STEPS` (4096) node budget in `search`; exhaustion returns `PathError::SearchBudgetExceeded`
+- [x] CRL signer from the candidate pool: a self-issued pool certificate now signs a direct CRL only if a path key or the anchor verifies its signature (`crl_signers` / `vouched`). PKITS gate unchanged
+- [ ] CMS `verify` proves no trust: the doc now warns loudly (done). The chain-validation hook is still open
+- [x] CMS content substitution: embedded and detached content together now return `Error::AmbiguousContent`
+- [x] CRL fail-open: an unparsable `revocationDate` now counts as revoked (`crl.rs` `is_revoked_at`)
+- [x] Wrong CRLReason constants fixed to RFC 5280 (REMOVE_FROM_CRL=8, PRIVILEGE_WITHDRAWN=9, AA_COMPROMISE=10); `chain.rs` uses the shared constant. Regression test `crl_reason_codes_match_rfc5280`
+
+### 9.2 Correctness bugs
+- [x] OCSP decoders reject real responses — fixed, regression tests in `x509/tests/ocsp_decode.rs` (original notes: `x509/ocsp.rs`): `SingleResponse` `nextUpdate [0]` / `singleExtensions [1]` (`:183`); `BasicOcspResponse` `certs [0]` (`:207-233`); `OcspResponse` `[0] EXPLICIT ResponseBytes` (`:272`); `TbsRequest` version tag (`:83`); revoked reason `[0] EXPLICIT ENUMERATED` (`:143`); signature BIT STRING unused-bits octet kept in `value` (`:225`). Test against real `openssl ocsp` output
+- [x] Time parsing (`core/types.rs`): trailing bytes after `Z` rejected; leap-year-aware day-of-month; `frac_digits` overflow checked; decode now validates the grammar; DER rejects offsets, UTCTime fractions and GeneralizedTime fractions ending in `0`. Tests in `core/tests/time_grammar.rs`. Still open: range-check offset hours/minutes; `to_unix_seconds` (`time.rs:125`) rollover check
+- [x] `VisibleString` range fixed to include space (`types.rs`, test in `core/tests/time_grammar.rs`)
+- [x] Certificate decode (`certificate.rs`, `crl.rs`) — done: `tbsCertificate` tag checked; trailing bytes rejected; version limited to v1–v3; extensions only on v3; TBS vs outer signature algorithm must match (CRL too); CRL version must be v2. Original notes: check the `tbsCertificate` tag; reject trailing bytes in `decode_tbs`; version is computed as `(v as u8)+1` (`:123`) and values above 2 are not rejected; reject extensions on v1/v2; compare `tbs.signature` to the outer `signatureAlgorithm` (RFC 5280 §4.1.1.2), also for CRLs (`crl.rs:93`)
+- [~] Non-canonical DER: done — OID arc minimality and dangling continuation (`check_oid_content`); `Enumerated` minimality; explicit `critical FALSE` rejected in DER; duplicate certificate extensions rejected; leading `0x80` in high-tag numbers rejected (tests: `core/tests/canonical_der.rs`, `x509/tests/extension_decode.rs`). Still open: SET (non-OF) member ordering, duplicate policy OIDs
+- [ ] Implement the CER 1000-octet string fragmentation rule and CER BOOLEAN / non-minimal length checks (Phase 2 line 30 claims this, but it is not implemented)
+- [ ] `Name::decode` / `Time::decode` use `is_universal`, which ignores the constructed bit (`name.rs:244,254`; `time.rs:83`); validate `Name` string values against their declared string type (`name.rs:50`); validate BMP / Universal / Teletex strings (`types.rs:742-756`)
+- [x] Public-API panics: `Tag::to_byte` now returns `Option<u8>`; `Length::encode` and CMS `SignedAttributes::der` size their length buffers for any `usize` (the latter now uses `Writer`)
+- [x] `SliceBackend` now returns `Error::OutputTooSmall` instead of silently dropping bytes (`WriteBackend::put`/`put_slice` are fallible)
+- [~] `Utf8String::as_str` — added `try_as_str` (returns `BadUtf8`), and `as_str` is documented. `ObjectIdentifier::arcs()` vs `matches()` first-arc handling and arcs >= 2^63
+- [x] Compiler: undefined type references and inline SEQUENCE/SET/CHOICE are now rejected by `check_schema` as `CompilerError`s before codegen (tests in `compiler/tests/hostile_schema.rs`). The remaining `unwrap`s in codegen sit behind guards in the same condition. Source spans are still open
+- [~] CMS config: `SignedData` now passes the caller's config to certificates, crls and signerInfos, and `ContentInfo::decode_content_with` takes a config. Still open: `enveloped_data.rs`, `recipient_info.rs`, `signer_info.rs`, `any.rs`; accepting constructed OCTET STRING
+- [x] CMS signed attributes (partial): `content-type` checked against `eContentType`; exactly one `message-digest` value; malformed attribute values now error via `Attribute::checked_values`. Also fixed `Attribute::values` to hold the `SET OF` contents, not the wrapper (tests in `cms/tests/cms.rs`). Still open: one signer's backend `Err` must not abort the others (`verify.rs:67`); pass key params to `verify_signature` (`:128`); content-type is not required when absent (RFC 5652 §11.1 says MUST)
+- [~] EnvelopedData: unwrap and content-decryption failures now both return `Error::DecryptionFailed`; CEK wiped (best effort); decrypt tests in `cms/tests/cms.rs`. Still open: RFC 3218 random-CEK substitution (needs an RNG this crate lacks); verify the recipient id in `decrypt`
+- [x] `PathConfig::max_path_length` is now enforced in `validate_path`. Still open: bound the number of policies per certificate and the O(N^2) policy-tree scans; check all subject `emailAddress` values against name constraints (`chain.rs:877`); `uri_host` mis-parses IPv6 literals (`:960`); `dns_within` with an empty constraint matches nothing
+- [x] PEM `b64_decode` rejects data after padding and non-zero leftover bits (`cli/src/pem.rs`)
+- [ ] `is_pkcs7_legacy` is true for any CMS v1 message (`signed_data.rs:56`); the comment that a plain Certificate is `[0] EXPLICIT` is wrong (`:70-77`)
+
+### 9.3 PKITS (243/247)
+- [x] 4.11.9 and 4.11.11: RFC 5280 §6.1.4(b)(2) delete-and-prune implemented (`delete_mapped_policies` in `policy.rs`). The old path-rejection shortcut is gone
+- [x] 4.12.9: anyPolicy honoured for self-issued certs before the end-entity (§6.1.3(d)(2), `validate_policies`)
+- [ ] 4.4.19: still failing with "issuer missing keyCertSign or cRLSign". Progress: the separate CRL-signing certificate in the pool is now accepted as a direct-CRL signer when the CA key vouches for it (`crl_signers` / `crl_signer_candidate`). The failure remains. Tracing shows two CRL-issuer pool certificates are vouched and tried, and three candidate checks fail with key-usage per case. The CRL check that still fails is not identified yet. Next: log which CRL (issuer, scope) and which candidate fails inside `check_revocation`
+- [ ] Review the `explicit` / `mapping_inhibit` / `inhibit_any` decrement-then-min ordering against §6.1.4(h)-(j); apply the end-entity certificate's own `policyConstraints` (§6.1.5(b), `policy.rs:164`); replace the PKITS-4.10.10-specific `mapped_away` hack
+- [ ] Merge the duplicate `tests/pkits.rs` and `tests/pkits_harness.rs` harnesses
+- [ ] Document any officially out-of-scope PKITS subset (the open Phase 7 item)
+
+### 9.4 Repo hygiene
+- [ ] Delete the orphan `src/extensions.rs` at the repo root (diverged from the x509 crate copy)
+- [ ] MSRV mismatch: workspace says 1.74.0, but `rust-toolchain.toml` / CI use 1.81 and `core::error::Error` needs 1.81; fix `rust-version` everywhere (and the compiler README)
+- [ ] `cargo-deny` is checked off in Phase 1 but CI only runs `cargo audit`; add a `deny.toml` + CI job
+- [ ] Remove stale docs: `chain.rs:28-31` ("policy mappings / delta CRLs not applied"), "Phase N item N" comments in `x509/lib.rs` / `verify.rs`, CLI `validate` / `text` help saying x509 is "not yet integrated" (`cli/src/main.rs:224,325`), and the Phase 6 line mentioning a non-existent `x509/src/crypto.rs`
+- [ ] Reconcile stale `todo.md` checkboxes (Phase 4 lines 80-82 are done per Phase 7)
+- [ ] Rename or fix `constant_time_compare` (`util.rs:52`, branches on data and returns early on length); review call sites
+- [ ] Commit `Cargo.lock` (the workspace ships a binary and a fuzz workspace)
+- [ ] Add `exclude` for PKITS data and `umbrella_corpus` so the crates.io tarballs stay small; add `documentation` and `[package.metadata.docs.rs]` (+ `docsrs` cfg) to all crates; use workspace keywords/categories consistently
+- [ ] `oss-fuzz/project.yaml` placeholder maintainer email; repo URL case (`tpt-solutions` vs `TPT-Solutions`)
+- [ ] Replace `compiler/tests/debug.rs` (token dump) with real tests; strengthen the trivial cms `lib.rs` doctest
+- [ ] cms `lib.rs:29-39` modules lack the `cfg(feature = "alloc")` gates x509 has; add `--no-default-features` / `no_std` CI jobs for x509 and cms
+
+### 9.5 Missing features
+- [ ] Bundled `SignatureVerifier` backend crate (`tpt-asn1-crypto-rustcrypto`, optional `-ring`): RSA PKCS#1 v1.5 / PSS, ECDSA P-256/384/521, Ed25519, SHA-1/2 (biggest adoption blocker; the only backend today is test-only in `pkits_harness.rs`)
+- [ ] Encoders for x509 / cms (only core has `Encode`): Certificate / TBSCertificate builder, CSR (PKCS#10) parse + build, CRL, OCSP request, CMS sign / encrypt
+- [ ] Derive macro crate (`tpt-asn1-derive`) as an alternative to the `build.rs` DSL path
+- [ ] Compiler: SIZE / range constraints, `...` extensibility, anonymous inline CHOICE (`codegen.rs:382`), DEFAULT beyond BOOLEAN/INTEGER/NULL (`parser.rs:326`), nested ENUMERATED, named bits, OID value assignments; consider importing standard `.asn` modules (IMPORTS)
+- [ ] PEM encode/decode in the library crates (today only in the CLI); PKCS#1 / SEC1 / PKCS#8 / PKCS#12 key structures
+- [ ] Trust-store loading (system / bundled roots), hostname verification, OCSP response signature validation
+- [ ] CMS: RFC 3161 timestamps (decide scope), AuthenticatedData / AuthEnvelopedData, countersignatures / CAdES
+- [ ] Optional features: `zeroize`, `serde`, `arbitrary`, `defmt`; make the `alloc` / `std` flags actually gate code
+- [ ] Certificate Transparency SCT extension; attribute certificates
+- [ ] Wire `tpt-asn1-x509` into the CLI so `validate` / `text` do full RFC 5280 path validation and typed field output
+- [ ] Implement CLI `req` / `generate-csr` (blocked on the crypto backend + encoders); man pages
+
+### 9.6 Innovation
+- [ ] Differential testing against OpenSSL in CI both ways: parse / re-encode byte parity, and PKITS chain verdicts (closes Phase 7 acceptance gate #4)
+- [ ] Strict-vs-lenient decode mode with structured diagnostics (a path + violation list, e.g. `tbs.extensions[3].critical: explicit FALSE`) as the basis of an ASN.1 / X.509 linter
+- [ ] `tpt-asn1 explain`: annotated dump with OID names, RFC section links and lint warnings, with `--json`
+- [ ] `tpt-asn1 infer`: derive a `.tpt-asn1` schema from a sample DER blob
+- [ ] WASM build + browser playground (decode / inspect / validate)
+- [ ] Verification profiles (`WebPki`, `Smime`, `CodeSigning`) as `PathConfig` presets covering EKU / key usage / revocation defaults
+
+### 9.7 Automation & release
+- [ ] CI: `cargo doc -D warnings` job, cargo-semver-checks, coverage (cargo-llvm-cov), Dependabot / Renovate, MSRV check wired to `rust-version`
+- [ ] Release automation: release-plz or cargo-release, cargo-dist prebuilt CLI binaries + `cargo binstall` metadata, publish dry-run job
+- [ ] `xtask` (or `justfile`) with `ci`, `pkits`, `fuzz-quick`, `gen-docs` commands
+- [ ] criterion `benches/` (decode cert, walk TLV, chain validate) + a CI regression gate
+- [ ] Re-enable the `proptest` round-trip tests once the toolchain pin is bumped; make fuzz targets assert round-trip / differential properties, not only no-panic
+- [ ] Add `#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]` to library crates
+- [ ] Add negative-case test corpora: BOOLEAN != 0xFF, non-minimal INTEGER, BIT STRING padding, OID edge cases, time edge cases, hostile BER, SAN `otherName`, NameConstraints with min/max, real OCSP responses, CMS negative paths
+
+### 9.8 Adoption: docs, examples, templates
+- [ ] README rewrite: feature / unsupported matrix, PKITS 243/247 claim with link, a 10-line "parse a cert" and 15-line "validate a chain" snippet, comparison vs `x509-parser` / `der` / `rasn`, security-posture and fail-closed notes, DSL section
+- [ ] Examples: CRL + OCSP checking, CMS verify with the RustCrypto backend, build a cert / CSR (after encoders), `build.rs` DSL walkthrough, `no_std` embedded example, hostile-input handling
+- [ ] Project template (`cargo generate` / template repo): custom ASN.1 protocol crate with `build.rs` + schema + round-trip tests + fuzz target
+- [ ] GitHub Action (`tpt-asn1-lint`) to lint certs / DER files in a repo
+- [ ] mdBook guide with cookbook ("verify S/MIME", "check a TLS chain", "write a schema"), a migration guide from `der` / `x509-parser`, and a threat-model / guarantees page
+- [ ] Reserve crates.io names and publish early; add live crates.io / docs.rs badges once published

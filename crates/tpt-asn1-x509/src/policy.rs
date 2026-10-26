@@ -148,8 +148,6 @@ pub(crate) fn validate_policies(
     // that may still follow; 0 means "in effect now".
     let mut explicit: u64 = if inputs.explicit_policy { 0 } else { n as u64 + 1 };
     let mut mapping_inhibit: u64 = if inputs.policy_mapping_inhibit { 0 } else { n as u64 + 1 };
-    // Set when mapping is forbidden outright rather than counted down.
-    let mut mapping_forbidden = inputs.policy_mapping_inhibit;
     let mut inhibit_any: u64 = if inputs.inhibit_any_policy { 0 } else { n as u64 + 1 };
 
     for (idx, cert) in certs.iter().enumerate() {
@@ -159,7 +157,10 @@ pub(crate) fn validate_policies(
 
         // RFC 5280 §6.1.3 (d): process this certificate's policies. anyPolicy in
         // the certificate is honoured only when inhibitAnyPolicy is not in effect.
-        apply_certificate_policies(&mut tree, cert, depth, inhibit_any > 0)?;
+        // RFC 5280 §6.1.3 (d)(2): anyPolicy is honoured when inhibit_anyPolicy is
+        // not in effect, or when a self-issued certificate precedes the end-entity.
+        let any_allowed = inhibit_any > 0 || (!is_end_entity && self_issued);
+        apply_certificate_policies(&mut tree, cert, depth, any_allowed)?;
 
         if is_end_entity {
             continue;
@@ -172,11 +173,12 @@ pub(crate) fn validate_policies(
             // Once mapping is forbidden outright (initial-policy-mapping-inhibit, or an
             // inhibitPolicyMapping of 0), a path that still carries policy mappings is
             // rejected rather than having them silently ignored (PKITS 4.10.2, 4.11.1).
-            if mapping_forbidden {
-                return Err(PathError::PolicyViolation);
-            }
             if mapping_inhibit > 0 {
                 apply_mappings(&mut tree, depth, &pm)?;
+            } else {
+                // RFC 5280 §6.1.4 (b)(2): with policy mapping inhibited, the
+                // mapped issuer policies are deleted rather than mapped.
+                delete_mapped_policies(&mut tree, depth, &pm)?;
             }
         }
 
@@ -199,9 +201,6 @@ pub(crate) fn validate_policies(
         // RFC 5280 §6.1.4 (i) and (j): the certificate's own constraints.
         if let Some(v) = constraints.and_then(|pc| pc.inhibit_policy_mapping) {
             mapping_inhibit = mapping_inhibit.min(v);
-            if v == 0 {
-                mapping_forbidden = true;
-            }
         }
         if let Some(ia) =
             cert.tbs.extensions.inhibit_any_policy().map_err(|_| PathError::PolicyViolation)?
@@ -293,6 +292,32 @@ fn apply_certificate_policies(
         }
     }
 
+    tree.prune_above(depth);
+    Ok(())
+}
+
+/// RFC 5280 §6.1.4 (b)(2): delete the depth-`depth` nodes whose valid policy is
+/// a mapped issuer policy, then prune childless nodes above them.
+fn delete_mapped_policies(
+    tree: &mut Tree,
+    depth: usize,
+    pm: &crate::extensions::PolicyMappings<'_>,
+) -> Result<(), PathError> {
+    if tree.is_null() {
+        return Ok(());
+    }
+    for m in &pm.mappings {
+        let issuer = m.issuer_domain_policy.as_bytes();
+        // RFC 5280 §6.1.4 (a): anyPolicy may not appear in a mapping.
+        if issuer == ANY_POLICY || m.subject_domain_policy.as_bytes() == ANY_POLICY {
+            return Err(PathError::PolicyViolation);
+        }
+        for i in tree.at_depth(depth) {
+            if tree.nodes[i].policy == issuer {
+                tree.nodes[i].alive = false;
+            }
+        }
+    }
     tree.prune_above(depth);
     Ok(())
 }

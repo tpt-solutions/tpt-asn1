@@ -15,7 +15,7 @@ use tpt_asn1_core::decode::{read_sequence, Decode};
 use tpt_asn1_core::error::Result;
 use tpt_asn1_core::reader::Reader;
 use tpt_asn1_core::tag::Tag;
-use tpt_asn1_core::types::{Integer, OctetString};
+use tpt_asn1_core::types::{BitString, Enumerated, Integer, OctetString};
 
 use crate::algorithm::AlgorithmIdentifier;
 use crate::oid;
@@ -79,8 +79,9 @@ pub struct TbsRequest<'a> {
 impl<'a> Decode<'a> for TbsRequest<'a> {
     fn decode(r: &mut Reader<'a>) -> Result<Self> {
         read_sequence(r, |inner| {
-            // Skip optional version [0] and requestorName [1].
-            while inner.peek_tag() == Ok(Tag::context(false, 0))
+            // version [0] EXPLICIT and requestorName [1] EXPLICIT are both
+            // constructed; skip them, they are not needed for matching.
+            while inner.peek_tag() == Ok(Tag::context(true, 0))
                 || inner.peek_tag() == Ok(Tag::context(true, 1))
             {
                 Any::decode(inner)?;
@@ -90,6 +91,10 @@ impl<'a> Decode<'a> for TbsRequest<'a> {
             let mut requests = Vec::new();
             while !reqs.is_empty() {
                 requests.push(Request::decode(&mut reqs)?);
+            }
+            // requestExtensions [2] EXPLICIT is optional and not used here.
+            while !inner.is_empty() {
+                Any::decode(inner)?;
             }
             Ok(TbsRequest { requests })
         })
@@ -107,7 +112,10 @@ impl<'a> Decode<'a> for OcspRequest<'a> {
     fn decode(r: &mut Reader<'a>) -> Result<Self> {
         read_sequence(r, |inner| {
             let tbs_request = TbsRequest::decode(inner)?;
-            // optionalSignature (ANY) is skipped if present.
+            // optionalSignature [0] EXPLICIT is skipped if present.
+            while !inner.is_empty() {
+                Any::decode(inner)?;
+            }
             Ok(OcspRequest { tbs_request })
         })
     }
@@ -136,15 +144,20 @@ impl<'a> Decode<'a> for CertStatus<'a> {
         if t == Tag::context(false, 0) {
             Ok(CertStatus::Good)
         } else if t == Tag::context(true, 1) {
-            let mut sub = Reader::new(any.value, *r.config());
+            // RevokedInfo ::= SEQUENCE { revocationTime GeneralizedTime,
+            //   revocationReason [0] EXPLICIT CRLReason OPTIONAL }
+            let config = *r.config();
+            let mut sub = Reader::new(any.value, config);
             let revocation_time = Time::decode(&mut sub)?;
-            let reason = if !sub.is_empty() {
-                Some(
-                    Integer::decode(&mut sub)?
-                        .as_u64()
-                        .ok_or(tpt_asn1_core::error::Error::Custom("revocation reason too large"))?
-                        as u8,
-                )
+            let reason = if sub.peek_tag() == Ok(Tag::context(true, 0)) {
+                let wrapped = Any::decode(&mut sub)?;
+                let mut inner = Reader::new(wrapped.value, config);
+                let code = Enumerated::decode(&mut inner)?
+                    .as_i64()
+                    .ok_or(tpt_asn1_core::error::Error::Custom("revocation reason invalid"))?;
+                Some(u8::try_from(code).map_err(|_| {
+                    tpt_asn1_core::error::Error::Custom("revocation reason out of range")
+                })?)
             } else {
                 None
             };
@@ -169,6 +182,8 @@ pub struct SingleResponse<'a> {
     pub cert_status: CertStatus<'a>,
     /// `thisUpdate` time.
     pub this_update: Time<'a>,
+    /// `nextUpdate` time, if the responder supplied one.
+    pub next_update: Option<Time<'a>>,
 }
 
 impl<'a> SingleResponse<'a> {
@@ -184,7 +199,19 @@ impl<'a> Decode<'a> for SingleResponse<'a> {
             let cert_id = CertId::decode(inner)?;
             let cert_status = CertStatus::decode(inner)?;
             let this_update = Time::decode(inner)?;
-            Ok(SingleResponse { cert_id, cert_status, this_update })
+            // nextUpdate [0] EXPLICIT GeneralizedTime OPTIONAL.
+            let next_update = if inner.peek_tag() == Ok(Tag::context(true, 0)) {
+                let wrapped = Any::decode(inner)?;
+                let mut sub = Reader::new(wrapped.value, *inner.config());
+                Some(Time::decode(&mut sub)?)
+            } else {
+                None
+            };
+            // singleExtensions [1] EXPLICIT Extensions OPTIONAL is not used here.
+            while !inner.is_empty() {
+                Any::decode(inner)?;
+            }
+            Ok(SingleResponse { cert_id, cert_status, this_update, next_update })
         })
     }
 }
@@ -208,8 +235,8 @@ impl<'a> Decode<'a> for BasicOcspResponse<'a> {
             let tbs_any = Any::decode(inner)?;
             let config = *inner.config();
             let mut tbs = Reader::new(tbs_any.value, config);
-            // version [0] OPTIONAL
-            if tbs.peek_tag() == Ok(Tag::context(false, 0)) {
+            // version [0] EXPLICIT OPTIONAL (constructed).
+            if tbs.peek_tag() == Ok(Tag::context(true, 0)) {
                 Any::decode(&mut tbs)?;
             }
             // responderID CHOICE — byName [1] or byKey [2].
@@ -222,8 +249,13 @@ impl<'a> Decode<'a> for BasicOcspResponse<'a> {
                 responses.push(SingleResponse::decode(&mut resp)?);
             }
             let signature_algorithm = AlgorithmIdentifier::decode(inner)?;
-            let sig_any = Any::decode(inner)?;
-            let signature = sig_any.value;
+            // The signature is a BIT STRING. Its first content octet is the
+            // unused-bits count, which is not part of the signature value.
+            let signature = BitString::decode(inner)?.data;
+            // certs [0] EXPLICIT SEQUENCE OF Certificate OPTIONAL: not parsed here.
+            while !inner.is_empty() {
+                Any::decode(inner)?;
+            }
             Ok(BasicOcspResponse {
                 tbs_response_data_der: tbs_any.full,
                 signature_algorithm,
@@ -265,12 +297,24 @@ pub struct OcspResponse<'a> {
 impl<'a> Decode<'a> for OcspResponse<'a> {
     fn decode(r: &mut Reader<'a>) -> Result<Self> {
         read_sequence(r, |inner| {
-            let status = tpt_asn1_core::types::Enumerated::decode(inner)?
+            let status = Enumerated::decode(inner)?
                 .as_i64()
-                .ok_or(tpt_asn1_core::error::Error::Custom("bad OCSP status"))?
-                as u8;
-            let response_bytes =
-                if inner.is_empty() { None } else { Some(ResponseBytes::decode(inner)?) };
+                .and_then(|s| u8::try_from(s).ok())
+                .ok_or(tpt_asn1_core::error::Error::Custom("bad OCSP status"))?;
+            // responseBytes [0] EXPLICIT ResponseBytes OPTIONAL.
+            let response_bytes = if inner.is_empty() {
+                None
+            } else {
+                let wrapped = Any::decode(inner)?;
+                if wrapped.tag != Tag::context(true, 0) {
+                    return Err(tpt_asn1_core::error::Error::UnexpectedTag {
+                        expected: Tag::context(true, 0),
+                        actual: wrapped.tag,
+                    });
+                }
+                let mut sub = Reader::new(wrapped.value, *inner.config());
+                Some(ResponseBytes::decode(&mut sub)?)
+            };
             Ok(OcspResponse { status, response_bytes })
         })
     }

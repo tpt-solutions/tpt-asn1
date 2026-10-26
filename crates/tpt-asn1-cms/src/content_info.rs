@@ -30,9 +30,18 @@ impl<'a> ContentInfo<'a> {
         self.content.value
     }
 
-    /// Decode the explicit `[0]` content as `T` (e.g. `SignedData`).
+    /// Decode the explicit `[0]` content as `T` (e.g. `SignedData`), under strict DER.
     pub fn decode_content<T: Decode<'a>>(&self) -> Result<T> {
-        let mut r = Reader::new(self.content.value, tpt_asn1_core::reader::Config::der());
+        self.decode_content_with(tpt_asn1_core::reader::Config::der())
+    }
+
+    /// Decode the explicit `[0]` content as `T` under `config`. Use a BER config
+    /// for streamed input with indefinite-length encodings.
+    pub fn decode_content_with<T: Decode<'a>>(
+        &self,
+        config: tpt_asn1_core::reader::Config,
+    ) -> Result<T> {
+        let mut r = Reader::new(self.content.value, config);
         let v = T::decode(&mut r)?;
         if !r.is_empty() {
             return Err(crate::error::Error::UnexpectedStructure);

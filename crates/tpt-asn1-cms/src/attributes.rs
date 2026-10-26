@@ -17,6 +17,7 @@ use crate::error::Result;
 use tpt_asn1_core::any::Any;
 use tpt_asn1_core::decode::Decode;
 use tpt_asn1_core::reader::Reader;
+use tpt_asn1_core::tag::Tag;
 use tpt_asn1_core::types::ObjectIdentifier;
 
 /// A single CMS attribute.
@@ -24,7 +25,8 @@ use tpt_asn1_core::types::ObjectIdentifier;
 pub struct Attribute<'a> {
     /// The attribute type OID.
     pub type_id: ObjectIdentifier<'a>,
-    /// The attribute values (a `SET OF`, typically one element).
+    /// The contents of the `attrValues` `SET OF`: the concatenated TLVs of its
+    /// elements, typically one.
     pub values: &'a [u8],
 }
 
@@ -39,14 +41,33 @@ impl<'a> Attribute<'a> {
     pub fn first_value(&self) -> Option<Any<'a>> {
         self.value_tlvs().next()
     }
+
+    /// Decode every value, reporting a malformed value as an error. Unlike
+    /// [`Attribute::value_tlvs`], a bad value is not silently dropped.
+    #[cfg(feature = "alloc")]
+    pub fn checked_values(&self) -> Result<alloc::vec::Vec<Any<'a>>> {
+        let mut r = Reader::new(self.values, tpt_asn1_core::reader::Config::ber());
+        let mut out = alloc::vec::Vec::new();
+        while !r.is_empty() {
+            out.push(Any::decode(&mut r)?);
+        }
+        Ok(out)
+    }
 }
 
 impl<'a> Decode<'a> for Attribute<'a> {
     fn decode(r: &mut Reader<'a>) -> tpt_asn1_core::error::Result<Self> {
         tpt_asn1_core::decode::read_sequence(r, |inner| {
             let type_id = ObjectIdentifier::decode(inner)?;
-            let values = inner.read_bytes(inner.remaining())?;
-            Ok(Attribute { type_id, values })
+            // attrValues SET OF AttributeValue: keep the elements, not the SET wrapper.
+            let set = tpt_asn1_core::any::Any::decode(inner)?;
+            if set.tag != Tag::universal_constructed(Tag::SET) {
+                return Err(tpt_asn1_core::error::Error::UnexpectedTag {
+                    expected: Tag::universal_constructed(Tag::SET),
+                    actual: set.tag,
+                });
+            }
+            Ok(Attribute { type_id, values: set.value })
         })
     }
 }

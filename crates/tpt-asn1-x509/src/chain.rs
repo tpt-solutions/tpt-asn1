@@ -51,6 +51,12 @@ use tpt_asn1_core::decode::Decode;
 /// depth-first search against pathological or cyclic certificate pools.
 const MAX_PATH_DEPTH: usize = 16;
 
+/// Upper bound on the number of search nodes visited in one
+/// [`build_and_validate`] call. Without it, a pool of many certificates sharing
+/// a subject name makes the depth-first search explore a number of chains that
+/// grows exponentially with depth.
+const MAX_SEARCH_STEPS: usize = 4096;
+
 /// `id-emailAddress` — 1.2.840.113549.1.9.1 (PKCS #9), used in subject DNs.
 const EMAIL_ADDRESS: &[u64] = &[1, 2, 840, 113549, 1, 9, 1];
 /// `id-ce-invalidityDate` — 2.5.29.24 (RFC 5280 §5.3.2).
@@ -125,6 +131,8 @@ pub enum PathError {
     UnableToBuildPath,
     /// The constructed path exceeds the configured maximum length.
     PathTooLong,
+    /// The issuer search exceeded its work budget before finding a valid path.
+    SearchBudgetExceeded,
     /// A certificate is outside its validity window at the validation time.
     InvalidValidity,
     /// A `BasicConstraints` requirement was violated (missing CA flag or
@@ -148,6 +156,9 @@ pub enum PathError {
     CrlInvalid,
     /// Signature verification failed (or the algorithm/key was unsupported).
     SignatureVerification(crate::verify::VerifyError),
+    /// A path-relevant extension could not be decoded. Failing closed here
+    /// means a malformed constraint can never be silently ignored.
+    MalformedExtension(tpt_asn1_core::error::Error),
 }
 
 impl core::fmt::Display for PathError {
@@ -155,6 +166,9 @@ impl core::fmt::Display for PathError {
         match self {
             PathError::UnableToBuildPath => f.write_str("unable to build certification path"),
             PathError::PathTooLong => f.write_str("certification path too long"),
+            PathError::SearchBudgetExceeded => {
+                f.write_str("issuer search exceeded its work budget")
+            }
             PathError::InvalidValidity => f.write_str("certificate not valid at the given time"),
             PathError::BasicConstraintsViolation => {
                 f.write_str("basic constraints violation (CA flag or path length)")
@@ -167,6 +181,7 @@ impl core::fmt::Display for PathError {
             PathError::CrlNotFound => f.write_str("no CRL found for certificate issuer"),
             PathError::CrlInvalid => f.write_str("CRL failed validation"),
             PathError::SignatureVerification(e) => write!(f, "signature verification failed: {e}"),
+            PathError::MalformedExtension(e) => write!(f, "malformed certificate extension: {e}"),
         }
     }
 }
@@ -186,7 +201,8 @@ pub fn build_and_validate<'a>(
 ) -> Result<ValidatedPath<'a>, PathError> {
     let mut chain = alloc::vec![target];
     let mut first_error = None;
-    search(&mut chain, intermediates, anchors, &config, &mut first_error)
+    let mut budget = MAX_SEARCH_STEPS;
+    search(&mut chain, intermediates, anchors, &config, &mut budget, &mut first_error)
         .ok_or_else(|| first_error.unwrap_or(PathError::UnableToBuildPath))
 }
 
@@ -232,9 +248,16 @@ fn search<'a>(
     intermediates: &'a [Certificate<'a>],
     anchors: &'a [TrustAnchor<'a>],
     config: &PathConfig<'a>,
+    budget: &mut usize,
     first_error: &mut Option<PathError>,
 ) -> Option<ValidatedPath<'a>> {
     let current = *chain.last()?;
+
+    if *budget == 0 {
+        first_error.get_or_insert(PathError::SearchBudgetExceeded);
+        return None;
+    }
+    *budget -= 1;
 
     for anchor in anchors.iter().filter(|a| a.name.matches(&current.tbs.issuer)) {
         let path = ValidatedPath { certs: chain.clone(), anchor };
@@ -259,7 +282,7 @@ fn search<'a>(
             continue;
         }
         chain.push(cand);
-        if let Some(path) = search(chain, intermediates, anchors, config, first_error) {
+        if let Some(path) = search(chain, intermediates, anchors, config, budget, first_error) {
             return Some(path);
         }
         chain.pop();
@@ -277,6 +300,13 @@ fn validate_path<'a>(
     pool: &'a [Certificate<'a>],
 ) -> Result<(), PathError> {
     let n = path.certs.len();
+    // `max_path_length` caps the intermediates, which are every path certificate
+    // except the target (`certs[0]`).
+    if let Some(limit) = config.max_path_length {
+        if n.saturating_sub(1) > limit {
+            return Err(PathError::PathTooLong);
+        }
+    }
     let key_params = resolve_key_params(path);
     // Keys that may sign a CRL for a direct issuer: the path and the anchor. A CRL
     // from an indirect issuer may also be signed by a certificate from the candidate
@@ -317,11 +347,18 @@ fn validate_path<'a>(
         check_serial_number(cert)?;
 
         if i > 0 {
-            let bc = match cert.tbs.extensions.basic_constraints().ok().flatten() {
+            let bc = match cert
+                .tbs
+                .extensions
+                .basic_constraints()
+                .map_err(PathError::MalformedExtension)?
+            {
                 Some(bc) if bc.ca => bc,
                 _ => return Err(PathError::BasicConstraintsViolation),
             };
-            if let Some(ku) = cert.tbs.extensions.key_usage().ok().flatten() {
+            if let Some(ku) =
+                cert.tbs.extensions.key_usage().map_err(PathError::MalformedExtension)?
+            {
                 if !ku.is_set(key_usage_bit::KEY_CERT_SIGN) {
                     return Err(PathError::KeyUsageViolation);
                 }
@@ -348,13 +385,21 @@ fn validate_path<'a>(
         // RFC 5280 §6.1.4 (b): the subject of a self-issued intermediate is not
         // checked against the constraints above it.
         let check_subject = i == 0 || !is_self_issued(cert);
-        for nc in &constraints {
-            if !name_constraints_hold(cert, nc, check_subject) {
-                return Err(PathError::NameConstraintViolation);
+        if !constraints.is_empty() {
+            // Decode the SAN once and fail closed: a malformed SAN must not
+            // make every name-constraint check vacuously pass.
+            let san =
+                cert.tbs.extensions.subject_alt_name().map_err(PathError::MalformedExtension)?;
+            for nc in &constraints {
+                if !name_constraints_hold(cert, san.as_ref(), nc, check_subject) {
+                    return Err(PathError::NameConstraintViolation);
+                }
             }
         }
         if i > 0 {
-            if let Some(nc) = cert.tbs.extensions.name_constraints().ok().flatten() {
+            if let Some(nc) =
+                cert.tbs.extensions.name_constraints().map_err(PathError::MalformedExtension)?
+            {
                 constraints.push(nc);
             }
         }
@@ -484,7 +529,8 @@ fn check_revocation(
 ) -> Result<(), PathError> {
     let serial = cert.tbs.serial_number_bytes();
     let is_ca = cert.tbs.is_ca();
-    let points = cert.tbs.extensions.crl_distribution_points().ok().flatten();
+    let points =
+        cert.tbs.extensions.crl_distribution_points().map_err(PathError::MalformedExtension)?;
     let indirect_issuers: Vec<&Name<'_>> = points
         .iter()
         .flat_map(|p| p.points.iter())
@@ -520,7 +566,7 @@ fn check_revocation(
                 continue;
             }
         };
-        let signers = crl_signers(indirect, keys, pool_keys);
+        let signers = crl_signers(indirect, keys, pool_keys, &crl.issuer, config.verifier);
         if let Err(e) = verify_crl_with_path_key(crl, &signers, config) {
             first_error.get_or_insert(e);
             continue;
@@ -556,21 +602,39 @@ fn is_delta_crl(crl: &CertificateList<'_>) -> bool {
 /// The keys that may sign a CRL for a certificate. An indirect CRL may come from any
 /// candidate that names the cRLIssuer. A direct CRL may also come from a self-issued
 /// candidate, which is how a CA signs across a key rollover (PKITS 4.5.4, 4.5.6).
+///
+/// A self-issued pool candidate is accepted only if one of the path keys (or the
+/// anchor) verifies its signature. Otherwise any self-signed certificate in the
+/// pool could sign a CRL for the CA's name, with no trust in its key.
 fn crl_signers<'b>(
     indirect: bool,
     keys: &'b [PathKey<'b>],
     pool_keys: &'b [PathKey<'b>],
+    crl_issuer: &Name<'_>,
+    verifier: &dyn SignatureVerifier,
 ) -> Vec<&'b PathKey<'b>> {
     if indirect {
         keys.iter().chain(pool_keys.iter()).collect()
     } else {
         keys.iter()
             .chain(pool_keys.iter().filter(|(k, _)| match k {
-                IssuerRef::Cert(c) => c.tbs.issuer.matches(&c.tbs.subject),
+                // A self-issued certificate, or a separate CRL-signing certificate
+                // issued by the CRL issuer (PKITS 4.4.19). Either must be vouched for
+                // by a key already on the path.
+                IssuerRef::Cert(c) => {
+                    (c.tbs.issuer.matches(&c.tbs.subject) || c.tbs.issuer.matches(crl_issuer))
+                        && vouched(c, keys, verifier)
+                }
                 IssuerRef::Anchor(_) => false,
             }))
             .collect()
     }
+}
+
+/// Whether `cert` is signed by one of the keys already on the path.
+fn vouched(cert: &Certificate<'_>, keys: &[PathKey<'_>], verifier: &dyn SignatureVerifier) -> bool {
+    keys.iter()
+        .any(|(issuer, params)| verify_cert_signature(cert, issuer, *params, verifier).is_ok())
 }
 
 /// RFC 5280 §6.3.3 (d): the certificate's status in the delta CRL that complements
@@ -599,7 +663,7 @@ fn delta_status(
         if crl_scope(delta, cert.tbs.is_ca(), points, indirect).ok().flatten().is_none() {
             continue;
         }
-        let signers = crl_signers(indirect, keys, pool_keys);
+        let signers = crl_signers(indirect, keys, pool_keys, &delta.issuer, config.verifier);
         if verify_crl_with_path_key(delta, &signers, config).is_err() {
             continue;
         }
@@ -677,13 +741,25 @@ fn same_distribution_name(a: &GeneralName<'_>, b: &GeneralName<'_>) -> bool {
 }
 
 /// Verify `crl` with the first path key whose subject matches the CRL's issuer.
+/// Whether `signer` may sign a CRL from `issuer`: its name is the CRL issuer, or it
+/// is a certificate issued by the CRL issuer (a separate CRL-signing certificate).
+fn crl_signer_candidate(signer: &IssuerRef<'_>, issuer: &Name<'_>) -> bool {
+    match signer {
+        IssuerRef::Cert(c) => signer.name().matches(issuer) || c.tbs.issuer.matches(issuer),
+        IssuerRef::Anchor(_) => signer.name().matches(issuer),
+    }
+}
+
 fn verify_crl_with_path_key(
     crl: &CertificateList<'_>,
     keys: &[&PathKey<'_>],
     config: &PathConfig<'_>,
 ) -> Result<(), PathError> {
     let mut first_error = None;
-    for entry in keys.iter().filter(|e| e.0.name().matches(&crl.issuer)) {
+    // A candidate is either named as the CRL issuer, or it is a path certificate
+    // issued by the CRL issuer: a separate CRL-signing certificate (PKITS 4.4.19).
+    // Its key still has to verify the CRL, and it must carry cRLSign.
+    for entry in keys.iter().filter(|e| crl_signer_candidate(&e.0, &crl.issuer)) {
         let (signer, params) = (&entry.0, entry.1);
         match validate_crl(crl, signer, params, config) {
             Ok(()) => return Ok(()),
@@ -708,8 +784,7 @@ fn entry_status(
     issuer: &Name<'_>,
     now: UnixTime,
 ) -> Option<bool> {
-    /// CRLReason `removeFromCRL` (RFC 5280 §5.3.1).
-    const REMOVE_FROM_CRL: u8 = 8;
+    use crate::extensions::crl_reason::REMOVE_FROM_CRL;
 
     let mut entry_issuer: Option<Name<'_>> = None;
     for entry in &crl.revoked {
@@ -752,7 +827,7 @@ fn validate_crl(
     config: &PathConfig<'_>,
 ) -> Result<(), PathError> {
     if let Some(ca) = issuer.cert() {
-        if let Some(ku) = ca.tbs.extensions.key_usage().ok().flatten() {
+        if let Some(ku) = ca.tbs.extensions.key_usage().map_err(PathError::MalformedExtension)? {
             if !ku.is_set(key_usage_bit::CRL_SIGN) {
                 return Err(PathError::KeyUsageViolation);
             }
@@ -860,6 +935,7 @@ fn constrained(
 /// subject email when `check_subject` is set, and always the SAN.
 fn name_constraints_hold(
     cert: &Certificate<'_>,
+    san: Option<&GeneralNames<'_>>,
     nc: &NameConstraints<'_>,
     check_subject: bool,
 ) -> bool {
@@ -880,7 +956,6 @@ fn name_constraints_hold(
             }
         }
     }
-    let san = cert.tbs.extensions.subject_alt_name().ok().flatten();
     for name in san.iter().flat_map(|s| s.names.iter()) {
         let ok = match name {
             GeneralName::DnsName(d) => constrained(
