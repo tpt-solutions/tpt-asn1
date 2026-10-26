@@ -199,10 +199,14 @@ Line references are from a static read of the code and were not confirmed by run
 - [x] PEM `b64_decode` rejects data after padding and non-zero leftover bits (`cli/src/pem.rs`)
 - [ ] `is_pkcs7_legacy` is true for any CMS v1 message (`signed_data.rs:56`); the comment that a plain Certificate is `[0] EXPLICIT` is wrong (`:70-77`)
 
-### 9.3 PKITS (243/247)
+### 9.3 PKITS (246/247 now; 4.4.19 open)
 - [x] 4.11.9 and 4.11.11: RFC 5280 §6.1.4(b)(2) delete-and-prune implemented (`delete_mapped_policies` in `policy.rs`). The old path-rejection shortcut is gone
 - [x] 4.12.9: anyPolicy honoured for self-issued certs before the end-entity (§6.1.3(d)(2), `validate_policies`)
-- [ ] 4.4.19: still failing with "issuer missing keyCertSign or cRLSign". Progress: the separate CRL-signing certificate in the pool is now accepted as a direct-CRL signer when the CA key vouches for it (`crl_signers` / `crl_signer_candidate`). The failure remains. Tracing shows two CRL-issuer pool certificates are vouched and tried, and three candidate checks fail with key-usage per case. The CRL check that still fails is not identified yet. Next: log which CRL (issuer, scope) and which candidate fails inside `check_revocation`
+- [ ] 4.4.19 (still open): the end-entity CRL check fails with "no CRL found". Findings:
+  - The CRL-signing certificate (`SeparateCertificateandCRLKeysCRLSigningCert`) has subject CA1 and is issued by the Trust Anchor. It is a sibling of the CA certificate, not a child. Its key correctly signs the CA1 CRL, and the CRL's authority key identifier matches its subject key identifier.
+  - Accepting such a certificate as a signer (subject = CRL issuer, signature verified by a path key) makes 4.4.19 pass, but it also makes 4.4.21 pass. 4.4.21 is an *invalid* case, so that is a regression. The CA2 pair has the same shape, and the distinguishing property is not yet identified. The subject-based rule was reverted.
+  - Kept: the candidate filter skips certificates whose keyUsage lacks cRLSign, and a CRL's authorityKeyIdentifier must match a candidate's subjectKeyIdentifier (RFC 5280 §5.2.1). Both are correct on their own.
+  - Next: find the rule that separates 4.4.19 from 4.4.21. The PKITS text is needed; the NIST PDF is not in the repo and could not be retrieved.
 - [ ] Review the `explicit` / `mapping_inhibit` / `inhibit_any` decrement-then-min ordering against §6.1.4(h)-(j); apply the end-entity certificate's own `policyConstraints` (§6.1.5(b), `policy.rs:164`); replace the PKITS-4.10.10-specific `mapped_away` hack
 - [ ] Merge the duplicate `tests/pkits.rs` and `tests/pkits_harness.rs` harnesses
 - [ ] Document any officially out-of-scope PKITS subset (the open Phase 7 item)

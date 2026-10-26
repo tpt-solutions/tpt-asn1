@@ -619,9 +619,9 @@ fn crl_signers<'b>(
     } else {
         keys.iter()
             .chain(pool_keys.iter().filter(|(k, _)| match k {
-                // A self-issued certificate, or a separate CRL-signing certificate
-                // issued by the CRL issuer (PKITS 4.4.19). Either must be vouched for
-                // by a key already on the path.
+                // A self-issued certificate, or a certificate issued by the CRL issuer,
+                // whose signature a key already on the path verifies. The check on
+                // the signature stops an unchained certificate from signing.
                 IssuerRef::Cert(c) => {
                     (c.tbs.issuer.matches(&c.tbs.subject) || c.tbs.issuer.matches(crl_issuer))
                         && vouched(c, keys, verifier)
@@ -746,8 +746,22 @@ fn same_distribution_name(a: &GeneralName<'_>, b: &GeneralName<'_>) -> bool {
 /// is a certificate issued by the CRL issuer (a separate CRL-signing certificate).
 fn crl_signer_candidate(signer: &IssuerRef<'_>, issuer: &Name<'_>) -> bool {
     match signer {
-        IssuerRef::Cert(c) => signer.name().matches(issuer) || c.tbs.issuer.matches(issuer),
+        IssuerRef::Cert(c) => {
+            let named = signer.name().matches(issuer) || c.tbs.issuer.matches(issuer);
+            // A certificate whose keyUsage omits cRLSign cannot sign a CRL, so it is
+            // not a candidate. Trying it would only report a key-usage error.
+            named && may_sign_crl(c)
+        }
         IssuerRef::Anchor(_) => signer.name().matches(issuer),
+    }
+}
+
+/// Whether `cert` may sign a CRL: it has no keyUsage, or keyUsage includes cRLSign.
+fn may_sign_crl(cert: &Certificate<'_>) -> bool {
+    match cert.tbs.extensions.key_usage() {
+        Ok(Some(ku)) => ku.is_set(key_usage_bit::CRL_SIGN),
+        Ok(None) => true,
+        Err(_) => false,
     }
 }
 
@@ -760,7 +774,24 @@ fn verify_crl_with_path_key(
     // A candidate is either named as the CRL issuer, or it is a path certificate
     // issued by the CRL issuer: a separate CRL-signing certificate (PKITS 4.4.19).
     // Its key still has to verify the CRL, and it must carry cRLSign.
-    for entry in keys.iter().filter(|e| crl_signer_candidate(&e.0, &crl.issuer)) {
+    // RFC 5280 §5.2.1: when the CRL names its signing key in an authorityKeyIdentifier,
+    // a candidate whose subjectKeyIdentifier differs cannot be the signer (PKITS 4.4.21).
+    let crl_aki = crl
+        .crl_extensions
+        .authority_key_identifier()
+        .ok()
+        .flatten()
+        .and_then(|aki| aki.key_identifier);
+    let aki_matches = |signer: &IssuerRef<'_>| match (crl_aki, signer) {
+        (Some(aki), IssuerRef::Cert(c)) => match c.tbs.extensions.subject_key_identifier() {
+            Ok(Some(ski)) => ski.0 == aki,
+            _ => true,
+        },
+        _ => true,
+    };
+    for entry in
+        keys.iter().filter(|e| crl_signer_candidate(&e.0, &crl.issuer) && aki_matches(&e.0))
+    {
         let (signer, params) = (&entry.0, entry.1);
         match validate_crl(crl, signer, params, config) {
             Ok(()) => return Ok(()),
