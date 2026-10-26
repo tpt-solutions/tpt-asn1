@@ -37,7 +37,7 @@ impl WriteBackend for VecBackend {
 }
 
 /// A [`WriteBackend`] backed by a fixed slice. Writing past the end returns
-/// [`Error::OutputTooSmall`] and leaves the buffer and position unchanged.
+/// [`crate::error::Error::OutputTooSmall`] and leaves the buffer and position unchanged.
 pub struct SliceBackend<'a> {
     buf: &'a mut [u8],
     pos: usize,

@@ -6,6 +6,7 @@ members = [
     "crates/tpt-asn1-x509",
     "crates/tpt-asn1-cms",
     "crates/tpt-asn1-cli",
+    "xtask",
 ]
 
 [workspace.package]

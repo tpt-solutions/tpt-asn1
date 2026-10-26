@@ -8,11 +8,11 @@
 //!
 //! Path construction is a depth-first search over every certificate whose
 //! subject matches the current certificate's issuer name. A complete candidate
-//! path is accepted only if [`validate_path`] passes. Signatures are checked
+//! path is accepted only if `validate_path` passes. Signatures are checked
 //! there, not during the search, so key-rollover certificates that share a name
 //! are resolved by signature, and DSA parameters can be inherited from the path.
 //!
-//! [`validate_path`] walks the path from the trust anchor down to the
+//! `validate_path` walks the path from the trust anchor down to the
 //! end-entity (RFC 5280 §6.1.3–6.1.4) and enforces:
 //!
 //! 1. name chaining (issuer DN matches the next certificate's subject DN),
@@ -192,7 +192,7 @@ impl core::error::Error for PathError {}
 /// Build a path from `target` to a trust anchor and validate it.
 ///
 /// Every chain of name-matching issuers is tried, depth first, and the first
-/// one that passes [`validate_path`] is returned. If none does, the first error
+/// one that passes `validate_path` is returned. If none does, the first error
 /// encountered is returned.
 pub fn build_and_validate<'a>(
     target: &'a Certificate<'a>,
@@ -243,7 +243,7 @@ type PathKey<'a> = (IssuerRef<'a>, Option<&'a [u8]>);
 /// Depth-first search for a chain that starts at `chain.last()` and ends at a
 /// trust anchor. Candidate issuers are those whose subject matches the current
 /// certificate's issuer name. Each complete chain is handed to
-/// [`validate_path`], and the first success wins.
+/// `validate_path`, and the first success wins.
 fn search<'a>(
     chain: &mut Vec<&'a Certificate<'a>>,
     intermediates: &'a [Certificate<'a>],
