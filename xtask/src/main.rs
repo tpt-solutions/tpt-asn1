@@ -25,6 +25,7 @@ fn main() {
             vec!["fmt", "--all", "--", "--check"],
             vec!["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"],
             vec!["test", "--workspace"],
+            vec!["bench", "-p", "tpt-asn1-core", "--no-run"],
         ],
         "pkits" => vec![vec!["test", "-p", "tpt-asn1-x509", "--test", "pkits_harness"]],
         "docs" => {
