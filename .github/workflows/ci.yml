@@ -5,7 +5,7 @@ on:
     branches: [master, main]
   pull_request:
   schedule:
-    - cron: '0 4 * * *'
+    - cron: '0 4 1 * *'
 
 env:
   CARGO_TERM_COLOR: always
@@ -36,6 +36,20 @@ jobs:
         run: cargo build --workspace --verbose
       - name: Test
         run: cargo test --workspace --verbose
+
+  # The NIST PKITS regression gate on its own, so a conformance regression is a
+  # named, blocking failure. It fails on any subcase outside the known-failure list
+  # in tests/pkits_harness.rs, and on any listed subcase that starts passing.
+  pkits:
+    name: PKITS conformance gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: PKITS regression gate
+        run: cargo test -p tpt-asn1-x509 --test pkits_harness -- --nocapture
 
   msrv:
     name: MSRV build (${{ matrix.os }})

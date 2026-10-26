@@ -17,18 +17,25 @@ use crate::name::Name;
 use crate::time::{Time, UnixTime};
 
 /// A `RevokedCertificate` entry in a CRL.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RevokedCertificate<'a> {
     /// The revoked certificate's serial number.
     pub user_certificate: Integer<'a>,
     /// The revocation date.
     pub revocation_date: Time<'a>,
+    /// The `crlEntryExtensions` (e.g. `CRLReason`, invalidityDate).
+    pub entry_extensions: Extensions<'a>,
 }
 
 impl<'a> RevokedCertificate<'a> {
     /// The serial number as raw bytes.
     pub fn serial_number_bytes(&self) -> &'a [u8] {
         self.user_certificate.as_bytes()
+    }
+
+    /// The `CRLReason` of this entry, if present (RFC 5280 §5.3.1).
+    pub fn reason(&self) -> Option<u8> {
+        self.entry_extensions.crl_reason().ok().flatten()
     }
 
     /// Returns `true` if `now` is on or after the revocation date.
@@ -103,7 +110,19 @@ impl<'a> Decode<'a> for CertificateList<'a> {
                     let entry = read_sequence(&mut rc, |e| {
                         let user_certificate = Integer::decode(e)?;
                         let revocation_date = Time::decode(e)?;
-                        Ok(RevokedCertificate { user_certificate, revocation_date })
+                        // crlEntryExtensions Extensions OPTIONAL (a bare SEQUENCE OF, RFC 5280 §5.3).
+                        let mut entry_extensions = Extensions::empty();
+                        if !e.is_empty()
+                            && e.peek_tag() == Ok(Tag::universal_constructed(Tag::SEQUENCE))
+                        {
+                            let ext_any = Any::decode(e)?;
+                            entry_extensions = Extensions::from_crl_content(ext_any.full, config)?;
+                        }
+                        Ok(RevokedCertificate {
+                            user_certificate,
+                            revocation_date,
+                            entry_extensions,
+                        })
                     })?;
                     revoked.push(entry);
                 }
@@ -112,7 +131,7 @@ impl<'a> Decode<'a> for CertificateList<'a> {
             let mut crl_extensions = Extensions::empty();
             if r2.peek_tag() == Ok(Tag::context(true, 0)) {
                 let ext_any = Any::decode(&mut r2)?;
-                crl_extensions = Extensions::from_content(ext_any.value, config)?;
+                crl_extensions = Extensions::from_crl_content(ext_any.value, config)?;
             }
 
             let signature_algorithm = AlgorithmIdentifier::decode(inner)?;

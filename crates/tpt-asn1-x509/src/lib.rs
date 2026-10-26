@@ -59,6 +59,8 @@ pub mod extensions;
 pub mod name;
 #[cfg(feature = "alloc")]
 pub mod ocsp;
+#[cfg(feature = "alloc")]
+mod policy;
 
 /// Pluggable cryptographic backend used for signature verification (Phase 4
 /// item 75). `tpt-asn1-cms` reuses this same trait for CMS signature verification.

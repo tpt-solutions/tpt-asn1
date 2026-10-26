@@ -145,6 +145,10 @@ pub mod ext {
     pub const DELTA_CRL_INDICATOR: Oid = &[2, 5, 29, 27];
     /// `id-ce-issuingDistributionPoint` — 2.5.29.28
     pub const ISSUING_DISTRIBUTION_POINT: Oid = &[2, 5, 29, 28];
+    /// `id-ce-policyMappings` — 2.5.29.33
+    pub const POLICY_MAPPINGS: Oid = &[2, 5, 29, 33];
+    /// `id-ce-cRLReason` — 2.5.29.21
+    pub const CRL_REASON: Oid = &[2, 5, 29, 21];
 }
 
 /// X.520 `AttributeType` OIDs used inside `RelativeDistinguishedName`.

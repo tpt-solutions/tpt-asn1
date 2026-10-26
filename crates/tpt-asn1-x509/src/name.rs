@@ -125,6 +125,23 @@ pub struct RelativeDistinguishedName<'a> {
 }
 
 impl<'a> RelativeDistinguishedName<'a> {
+    /// Decode an RDN from its content octets: the `SET OF AttributeTypeAndValue` body,
+    /// with the tag and length already consumed. This is the form of an IMPLICITly
+    /// tagged RDN, such as `nameRelativeToCRLIssuer` (RFC 5280 §4.2.1.13).
+    pub fn from_content(content: &'a [u8], config: crate::reader::Config) -> Result<Self> {
+        let mut r = Reader::new(content, config);
+        let mut attributes = Vec::new();
+        while !r.is_empty() {
+            attributes.push(AttributeTypeAndValue::decode(&mut r)?);
+        }
+        Ok(RelativeDistinguishedName { attributes })
+    }
+
+    /// Returns `true` if the two RDNs assert the same attributes, under RFC 5280 §7.1
+    /// matching.
+    pub fn matches(&self, other: &RelativeDistinguishedName<'_>) -> bool {
+        rdn_matches(self, other)
+    }
     /// Find the first attribute whose type OID equals `expected`.
     pub fn find(&self, expected: oid::Oid) -> Option<&AttributeValue<'a>> {
         self.attributes.iter().find(|a| oid::oid_eq(&a.type_id, expected)).map(|a| &a.value)
@@ -143,6 +160,14 @@ pub struct Name<'a> {
 }
 
 impl<'a> Name<'a> {
+    /// Returns `true` if `self` is `base` extended by `rdn`: the name a
+    /// `nameRelativeToCRLIssuer` distribution point denotes (RFC 5280 §4.2.1.13).
+    pub fn is_extended_by(&self, base: &Name<'_>, rdn: &RelativeDistinguishedName<'_>) -> bool {
+        let n = base.rdns.len();
+        self.rdns.len() == n + 1
+            && self.rdns[..n].iter().zip(base.rdns.iter()).all(|(a, b)| rdn_matches(a, b))
+            && rdn_matches(&self.rdns[n], rdn)
+    }
     /// The retained DER encoding of this `Name` (exact-match source).
     pub fn as_der(&self) -> &'a [u8] {
         self.der
@@ -163,6 +188,38 @@ impl<'a> Name<'a> {
         self.rdns.iter().find_map(|rdn| rdn.find(expected))
     }
 
+    /// The number of `RelativeDistinguishedName`s.
+    pub fn rdn_count(&self) -> usize {
+        self.rdns.len()
+    }
+
+    /// Returns `true` if this name is empty (no RDNs).
+    pub fn is_empty(&self) -> bool {
+        self.rdns.is_empty()
+    }
+
+    /// Returns `true` if `self` is within the subtree defined by `parent`
+    /// under RFC 5280 §7.1 rules.
+    ///
+    /// `self` is within the subtree of `parent` when it contains at least as
+    /// many RDNs as `parent`, and the leading (most-specific) RDNs of `self`
+    /// match `parent`'s RDNs positionally after skipping `skip` RDNs (the
+    /// `minimum` base distance of a `directoryName` constraint).
+    pub fn within_subtree(&self, parent: &Name<'a>, skip: usize) -> bool {
+        if parent.rdns.is_empty() {
+            return true;
+        }
+        if self.rdns.len() < skip + parent.rdns.len() {
+            return false;
+        }
+        for k in 0..parent.rdns.len() {
+            if !rdn_matches(&self.rdns[skip + k], &parent.rdns[k]) {
+                return false;
+            }
+        }
+        true
+    }
+
     /// Returns `true` if `self` and `other` match under RFC 5280 §7.1 rules.
     ///
     /// RDNs are compared positionally; within each RDN the AVAs are compared as
@@ -172,18 +229,8 @@ impl<'a> Name<'a> {
             return false;
         }
         for (a, b) in self.rdns.iter().zip(other.rdns.iter()) {
-            if a.attributes.len() != b.attributes.len() {
+            if !rdn_matches(a, b) {
                 return false;
-            }
-            for ava in &a.attributes {
-                let Some(other_ava) =
-                    b.attributes.iter().find(|x| x.type_id.as_bytes() == ava.type_id.as_bytes())
-                else {
-                    return false;
-                };
-                if normalize_value(ava.value) != normalize_value(other_ava.value) {
-                    return false;
-                }
             }
         }
         true
@@ -219,6 +266,25 @@ impl<'a> Decode<'a> for Name<'a> {
         }
         Ok(Name { rdns, der })
     }
+}
+
+/// Compare two RDNs as a set of attribute/value assertions under RFC 5280
+/// §7.1: attributes match by type OID, then by the normalized value.
+fn rdn_matches(a: &RelativeDistinguishedName<'_>, b: &RelativeDistinguishedName<'_>) -> bool {
+    if a.attributes.len() != b.attributes.len() {
+        return false;
+    }
+    for ava in &a.attributes {
+        let Some(other_ava) =
+            b.attributes.iter().find(|x| x.type_id.as_bytes() == ava.type_id.as_bytes())
+        else {
+            return false;
+        };
+        if normalize_value(ava.value) != normalize_value(other_ava.value) {
+            return false;
+        }
+    }
+    true
 }
 
 /// Normalize a directory-string value per RFC 5280 §7.1:

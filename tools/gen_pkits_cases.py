@@ -79,6 +79,13 @@ def extract_paths(body):
     bullet or a blank/page-furniture line. Items within a block are comma
     separated; item names may be wrapped across lines.
     """
+    STOP_PREFIXES = (
+        "See the",
+        "The purpose",
+        "Note ",
+        "The application",
+        "When ",
+    )
     blocks = []
     cur = None
     for ln in body:
@@ -93,6 +100,11 @@ def extract_paths(body):
                 blocks.append(cur)
             cur = stripped.lstrip("\u2022").strip()
         elif cur is not None:
+            if stripped.startswith(STOP_PREFIXES):
+                if cur:
+                    blocks.append(cur)
+                cur = None
+                continue
             cur += " " + stripped
     if cur:
         blocks.append(cur)
@@ -159,10 +171,10 @@ def policy_flags(text):
 def find_inputs(body):
     """Return the 'following inputs' numbered list items, or None."""
     joined = "\n".join(body)
-    idx = joined.find("following inputs")
-    if idx == -1:
+    m = re.search(r"following[\s]*inputs", joined)
+    if not m:
         return None
-    rest = joined[idx:]
+    rest = joined[m.end():]
     proc = rest.find("Procedure:")
     if proc != -1:
         rest = rest[:proc]
@@ -180,11 +192,48 @@ def find_inputs(body):
             cur += " " + ln
     if cur:
         items.append(cur)
-    return items
+    # The Expected-Result paragraph may run directly into the last input item
+    # when the PDF blocks are jumbled; drop that prose from the item text.
+    trimmed = []
+    for it in items:
+        cut = re.search(r" The (authorities-constrained-policy-set|user-constrained)", it)
+        if cut:
+            it = it[: cut.start()]
+        trimmed.append(it.strip())
+    return [t for t in trimmed if t]
 
 
 def expected_valid(text):
-    return not ("not validate successfully" in text)
+    # NIST conditions the outcome on policyConstraints support ("if the application can
+    # process the policyConstraints extension, then the path should be rejected,
+    # otherwise it should validate successfully"). This harness processes it, so the
+    # rejection branch applies.
+    # NIST phrases rejection several ways: "should not validate
+    # successfully", "not should validate ...", "should NOT validate", or a
+    # negation across a line wrap. A leading "not" anywhere before "validate"
+    # in the Expected-Result prose means the path must fail.
+    normalized = re.sub(r"\s+", " ", text.lower())
+    # Some results are conditional on policyConstraints support. When both policy
+    # sets come out empty, this harness (which processes policyConstraints) must
+    # reject the path. Other conditional results depend on the input settings and
+    # are left to the rules below.
+    if re.search(
+        r"policy-set will be empty and the explicit-policy-indicator will be set "
+        r"\(if the application can process the policyconstraints extension\)\. "
+        r"if the application can process the policyconstraints extension, then the "
+        r"path should be rejected, otherwise it should validate",
+        normalized,
+    ):
+        return False
+    # "If the user-constrained-policy-set is empty ..., then the path should not validate"
+    # describes the case where the initial policy set excludes the policy. It is not the
+    # outcome of the default settings, so drop it before reading the result.
+    normalized = re.sub(
+        r"\bif the user-constrained-policy-set is empty\b[^.]*?should not validate successfully\.?",
+        " ",
+        normalized,
+    )
+    return not re.search(r"\bnot\s+(?:should\s+)?validate|should\s+not\s+validate", normalized)
 
 
 def build_subcases(cid, body, ee, paths):
@@ -213,7 +262,7 @@ def _case(cid, ok, ee, paths, explicit, mapping, anyp, set_):
         "inhibit_any": anyp,
         "policy_set": set_,
     }
-    vec = ["  {"]
+    vec = ["  Case {"]
     vec.append(f'    id: "{cid}",')
     vec.append(f'    ee: "{ee}",')
     vec.append(f"    expect_valid: {str(ok).lower()},")
@@ -235,9 +284,10 @@ def _case(cid, ok, ee, paths, explicit, mapping, anyp, set_):
 
 
 def main():
+    sys.stdout.reconfigure(encoding="utf-8", newline="\n")
     if len(sys.argv) < 2:
         sys.exit("usage: gen_pkits_cases.py PATH_TO_PKITS.txt")
-    text = open(sys.argv[1], encoding="utf-8").read()
+    text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
     cases = split_cases(text)
 
     certs_dir = sys.argv[2] if len(sys.argv) > 2 else None

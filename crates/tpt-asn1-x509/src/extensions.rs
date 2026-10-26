@@ -15,7 +15,7 @@ use tpt_asn1_core::reader::Reader;
 use tpt_asn1_core::tag::Tag;
 use tpt_asn1_core::types::{BitString, Boolean, Integer, ObjectIdentifier, OctetString};
 
-use crate::name::Name;
+use crate::name::{Name, RelativeDistinguishedName};
 use crate::oid;
 
 /// A single certificate extension: `SEQUENCE { extnID OID, critical BOOLEAN
@@ -73,6 +73,25 @@ impl<'a> Extensions<'a> {
                     return Err(Error::UnknownCriticalExtension);
                 }
                 list.push(ext);
+            }
+            Ok(list)
+        })
+        .map(|list| Extensions { list })
+    }
+
+    /// Decode CRL-level or CRL-entry extensions.
+    ///
+    /// Unlike [`from_content`](Self::from_content), an unrecognised critical
+    /// extension is kept rather than rejected here. CRL validation checks critical
+    /// extensions against its own lists (RFC 5280 §5.2 and §5.3) and fails closed
+    /// there, which keeps an indirect CRL's critical `certificateIssuer` entry
+    /// extension usable.
+    pub fn from_crl_content(content: &'a [u8], config: crate::reader::Config) -> Result<Self> {
+        let mut r = Reader::new(content, config);
+        read_sequence(&mut r, |inner| {
+            let mut list = Vec::new();
+            while !inner.is_empty() {
+                list.push(Extension::decode(inner)?);
             }
             Ok(list)
         })
@@ -163,6 +182,52 @@ impl<'a> Extensions<'a> {
     pub fn inhibit_any_policy(&self) -> Result<Option<InhibitAnyPolicy>> {
         self.find(oid::ext::INHIBIT_ANY_POLICY).map(|e| e.decode_value()).transpose()
     }
+
+    /// Decode the [`PolicyMappings`], if present.
+    pub fn policy_mappings(&self) -> Result<Option<PolicyMappings<'a>>> {
+        self.find(oid::ext::POLICY_MAPPINGS).map(|e| e.decode_value()).transpose()
+    }
+
+    /// The `cRLNumber` (RFC 5280 §5.2.3), if present.
+    pub fn crl_number(&self) -> Result<Option<u64>> {
+        self.find(oid::ext::CRL_NUMBER)
+            .map(|e| {
+                e.decode_value::<Integer<'_>>()?
+                    .as_u64()
+                    .ok_or(Error::Custom("cRLNumber out of range"))
+            })
+            .transpose()
+    }
+
+    /// The `deltaCRLIndicator` `baseCRLNumber` (RFC 5280 §5.2.4), if present.
+    pub fn delta_crl_indicator(&self) -> Result<Option<u64>> {
+        self.find(oid::ext::DELTA_CRL_INDICATOR)
+            .map(|e| {
+                e.decode_value::<Integer<'_>>()?
+                    .as_u64()
+                    .ok_or(Error::Custom("delta CRL base number out of range"))
+            })
+            .transpose()
+    }
+
+    /// Decode the [`IssuingDistributionPoint`], if present.
+    pub fn issuing_distribution_point(&self) -> Result<Option<IssuingDistributionPoint<'a>>> {
+        self.find(oid::ext::ISSUING_DISTRIBUTION_POINT).map(|e| e.decode_value()).transpose()
+    }
+
+    /// The `CRLReason` of a CRL entry (RFC 5280 §5.3.1), if present.
+    pub fn crl_reason(&self) -> Result<Option<u8>> {
+        self.find(oid::ext::CRL_REASON)
+            .map(|e| {
+                let reason = e.decode_value::<tpt_asn1_core::types::Enumerated<'_>>()?;
+                let v = reason.as_i64().ok_or(Error::Custom("CRLReason out of range"))?;
+                if !(0..=9).contains(&v) {
+                    return Err(Error::Custom("CRLReason out of range"));
+                }
+                Ok(v as u8)
+            })
+            .transpose()
+    }
 }
 
 impl<'a> Decode<'a> for Extension<'a> {
@@ -210,6 +275,8 @@ pub fn is_known_extension(oid: &ObjectIdentifier<'_>) -> bool {
             oid::ext::CRL_NUMBER,
             oid::ext::DELTA_CRL_INDICATOR,
             oid::ext::ISSUING_DISTRIBUTION_POINT,
+            oid::ext::POLICY_MAPPINGS,
+            oid::ext::CRL_REASON,
         ],
     )
 }
@@ -431,6 +498,18 @@ impl<'a> GeneralNames<'a> {
     pub fn iter(&self) -> core::slice::Iter<'_, GeneralName<'a>> {
         self.names.iter()
     }
+
+    /// Decode the content octets of an IMPLICITly tagged `GeneralNames`
+    /// (e.g. `[0]`/`[2]` in a distribution point). The tag and length have
+    /// already been consumed, so there is no SEQUENCE header to read.
+    pub fn from_content(content: &'a [u8], config: crate::reader::Config) -> Result<Self> {
+        let mut r = Reader::new(content, config);
+        let mut names = Vec::new();
+        while !r.is_empty() {
+            names.push(GeneralName::decode(&mut r)?);
+        }
+        Ok(GeneralNames { names })
+    }
 }
 
 impl<'a> Decode<'a> for GeneralNames<'a> {
@@ -497,11 +576,14 @@ impl<'a> Decode<'a> for AuthorityKeyIdentifier<'a> {
 
 // --- CRLDistributionPoints ------------------------------------------------
 
-/// `DistributionPoint` (subset: full-name distribution points).
+/// `DistributionPoint` (RFC 5280 §4.2.1.13).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DistributionPoint<'a> {
     /// The `fullName` (if present).
     pub full_name: Option<GeneralNames<'a>>,
+    /// The `nameRelativeToCRLIssuer`, an RDN appended to the CRL issuer's name (if
+    /// present).
+    pub relative_name: Option<RelativeDistinguishedName<'a>>,
     /// The CRL issuer (if present).
     pub crl_issuer: Option<GeneralNames<'a>>,
 }
@@ -525,31 +607,38 @@ impl<'a> Decode<'a> for CrlDistributionPoints<'a> {
         read_sequence(r, |inner| {
             let mut points = Vec::new();
             while !inner.is_empty() {
-                let dp_any = Any::decode(inner)?;
-                let mut sub = Reader::new(dp_any.value, *inner.config());
-                let (full_name, crl_issuer) = read_sequence(&mut sub, |dp| {
+                let (full_name, relative_name, crl_issuer) = read_sequence(inner, |dp| {
                     let mut full_name = None;
+                    let mut relative_name = None;
                     let mut crl_issuer = None;
                     while !dp.is_empty() {
                         let field = Any::decode(dp)?;
                         if field.tag == Tag::context(true, 0) {
-                            // [0] EXPLICIT DistributionPointName -> fullName [0]
+                            // [0] EXPLICIT DistributionPointName: fullName [0] or
+                            // nameRelativeToCRLIssuer [1] (IMPLICIT, so SET content).
                             let mut fn_sub = Reader::new(field.value, *dp.config());
                             let fn_any = Any::decode(&mut fn_sub)?;
                             if fn_any.tag == Tag::context(true, 0)
                                 || fn_any.tag == Tag::context(false, 0)
                             {
-                                let mut g = Reader::new(fn_any.value, *dp.config());
-                                full_name = Some(GeneralNames::decode(&mut g)?);
+                                full_name =
+                                    Some(GeneralNames::from_content(fn_any.value, *dp.config())?);
+                            } else if fn_any.tag == Tag::context(true, 1)
+                                || fn_any.tag == Tag::context(false, 1)
+                            {
+                                relative_name = Some(RelativeDistinguishedName::from_content(
+                                    fn_any.value,
+                                    *dp.config(),
+                                )?);
                             }
                         } else if field.tag == Tag::context(true, 2) {
-                            let mut g = Reader::new(field.value, *dp.config());
-                            crl_issuer = Some(GeneralNames::decode(&mut g)?);
+                            crl_issuer =
+                                Some(GeneralNames::from_content(field.value, *dp.config())?);
                         }
                     }
-                    Ok((full_name, crl_issuer))
+                    Ok((full_name, relative_name, crl_issuer))
                 })?;
-                points.push(DistributionPoint { full_name, crl_issuer });
+                points.push(DistributionPoint { full_name, relative_name, crl_issuer });
             }
             Ok(CrlDistributionPoints { points })
         })
@@ -723,9 +812,7 @@ fn decode_subtrees(
     let mut r = Reader::new(content, config);
     let mut out = Vec::new();
     while !r.is_empty() {
-        let st_any = Any::decode(&mut r)?;
-        let mut sub = Reader::new(st_any.value, config);
-        let subtree = read_sequence(&mut sub, |st| {
+        let subtree = read_sequence(&mut r, |st| {
             let base = GeneralName::decode(st)?;
             let mut minimum = 0u64;
             let mut maximum = None;
@@ -770,14 +857,19 @@ impl<'a> Decode<'a> for PolicyConstraints {
             let mut require_explicit_policy = None;
             let mut inhibit_policy_mapping = None;
             while !inner.is_empty() {
+                // [0] and [1] are IMPLICIT SkipCerts (RFC 5280 Appendix A.1), so the
+                // field's content octets are the INTEGER value itself.
                 let f = Any::decode(inner)?;
-                let mut vr = Reader::new(f.value, *inner.config());
-                let v = Integer::decode(&mut vr)?
-                    .as_u64()
-                    .ok_or(Error::Custom("policy constraint too large"))?;
+                let config = *inner.config();
                 if f.tag == Tag::context(false, 0) {
+                    let v = Integer::decode_content(&mut Reader::new(f.value, config))?
+                        .as_u64()
+                        .ok_or(Error::Custom("policy constraint too large"))?;
                     require_explicit_policy = Some(v);
                 } else if f.tag == Tag::context(false, 1) {
+                    let v = Integer::decode_content(&mut Reader::new(f.value, config))?
+                        .as_u64()
+                        .ok_or(Error::Custom("policy constraint too large"))?;
                     inhibit_policy_mapping = Some(v);
                 }
             }
@@ -799,6 +891,201 @@ impl<'a> Decode<'a> for InhibitAnyPolicy {
             skip_certs: Integer::decode(r)?
                 .as_u64()
                 .ok_or(Error::Custom("inhibitAnyPolicy too large"))?,
+        })
+    }
+}
+
+// --- PolicyMappings --------------------------------------------------------
+
+/// One `PolicyMapping` — `{ issuerDomainPolicy OID, subjectDomainPolicy OID }`
+/// (RFC 5280 §4.2.1.5).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PolicyMapping<'a> {
+    /// The policy OID in the issuer's certificate policies.
+    pub issuer_domain_policy: ObjectIdentifier<'a>,
+    /// The equivalent policy OID in the subject's certificate policies.
+    pub subject_domain_policy: ObjectIdentifier<'a>,
+}
+
+/// `PolicyMappings` — `SEQUENCE SIZE (1..MAX) OF PolicyMapping`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PolicyMappings<'a> {
+    /// The mappings.
+    pub mappings: Vec<PolicyMapping<'a>>,
+}
+
+impl<'a> Decode<'a> for PolicyMappings<'a> {
+    fn decode(r: &mut Reader<'a>) -> Result<Self> {
+        read_sequence(r, |inner| {
+            let mut mappings = Vec::new();
+            while !inner.is_empty() {
+                let m = read_sequence(inner, |m| {
+                    let issuer_domain_policy = ObjectIdentifier::decode(m)?;
+                    let subject_domain_policy = ObjectIdentifier::decode(m)?;
+                    Ok(PolicyMapping { issuer_domain_policy, subject_domain_policy })
+                })?;
+                mappings.push(m);
+            }
+            Ok(PolicyMappings { mappings })
+        })
+    }
+}
+
+// --- CRL reason codes ------------------------------------------------------
+
+/// CRL revocation reason codes (RFC 5280 §5.3.1).
+pub mod crl_reason {
+    /// `unspecified` — 0
+    pub const UNSPECIFIED: u8 = 0;
+    /// `keyCompromise` — 1
+    pub const KEY_COMPROMISE: u8 = 1;
+    /// `cACompromise` — 2
+    pub const CA_COMPROMISE: u8 = 2;
+    /// `affiliationChanged` — 3
+    pub const AFFILIATION_CHANGED: u8 = 3;
+    /// `superseded` — 4
+    pub const SUPERSEDED: u8 = 4;
+    /// `cessationOfOperation` — 5
+    pub const CESSATION_OF_OPERATION: u8 = 5;
+    /// `certificateHold` — 6
+    pub const CERTIFICATE_HOLD: u8 = 6;
+    /// `privilegeWithdrawn` — 7
+    pub const PRIVILEGE_WITHDRAWN: u8 = 7;
+    /// `aACompromise` — 8
+    pub const AA_COMPROMISE: u8 = 8;
+    /// `removeFromCRL` — 9
+    pub const REMOVE_FROM_CRL: u8 = 9;
+}
+
+/// `ReasonFlags` — a `BIT STRING` whose named bits are the CRL reason codes
+/// (RFC 5280 §4.2.1.13 / §5.2.7).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ReasonFlags {
+    /// Bit `i` is set iff reason code `i` is covered.
+    mask: u16,
+}
+
+impl ReasonFlags {
+    /// Interpret a `BIT STRING` as a reason-flag set.
+    pub fn from_bit_string(bs: &BitString<'_>) -> Self {
+        let mut mask = 0u16;
+        for (i, &byte) in bs.data.iter().enumerate() {
+            for bit in 0..8 {
+                let n = i * 8 + bit;
+                if n >= 16 {
+                    continue;
+                }
+                if byte & (0x80 >> bit) != 0 {
+                    mask |= 1 << n;
+                }
+            }
+        }
+        ReasonFlags { mask }
+    }
+
+    /// Returns `true` if reason code `reason` is covered.
+    pub fn covers(&self, reason: u8) -> bool {
+        reason < 16 && (self.mask & (1 << reason)) != 0
+    }
+
+    /// The raw reason-code bit mask.
+    pub fn mask(&self) -> u16 {
+        self.mask
+    }
+
+    /// Returns `true` if all non-`unspecified` reason codes are covered.
+    pub fn covers_all(&self) -> bool {
+        // Reasons 1..=8 (keyCompromise .. aACompromise); `unspecified` (0) can
+        // never be covered per RFC 5280 §5.2.7 ("all reasons" excludes it).
+        self.mask & 0b0001_1111_1110 == 0b0001_1111_1110
+    }
+}
+
+// --- IssuingDistributionPoint ----------------------------------------------
+
+/// `IssuingDistributionPoint` CRL extension (RFC 5280 §5.2.7).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IssuingDistributionPoint<'a> {
+    /// The `fullName` distribution point (if present).
+    pub distribution_point: Option<GeneralNames<'a>>,
+    /// The `nameRelativeToCRLIssuer` distribution point, an RDN appended to the CRL
+    /// issuer's name (if present).
+    pub relative_name: Option<RelativeDistinguishedName<'a>>,
+    /// `onlyContainsUserCerts`.
+    pub only_contains_user_certs: bool,
+    /// `onlyContainsCACerts`.
+    pub only_contains_ca_certs: bool,
+    /// `onlySomeReasons`, if present.
+    pub only_some_reasons: Option<ReasonFlags>,
+    /// `indirectCRL`.
+    pub indirect_crl: bool,
+    /// `onlyContainsAttributeCerts`.
+    pub only_contains_attribute_certs: bool,
+}
+
+impl<'a> Decode<'a> for IssuingDistributionPoint<'a> {
+    fn decode(r: &mut Reader<'a>) -> Result<Self> {
+        read_sequence(r, |inner| {
+            let mut distribution_point = None;
+            let mut relative_name = None;
+            let mut only_contains_user_certs = false;
+            let mut only_contains_ca_certs = false;
+            let mut only_some_reasons = None;
+            let mut indirect_crl = false;
+            let mut only_contains_attribute_certs = false;
+            while !inner.is_empty() {
+                let field = Any::decode(inner)?;
+                let config = *inner.config();
+                match field.tag {
+                    t if t == Tag::context(true, 0) => {
+                        // [0] EXPLICIT DistributionPointName (CHOICE) -> fullName [0] IMPLICIT.
+                        let mut sub = Reader::new(field.value, config);
+                        let dp = Any::decode(&mut sub)?;
+                        if dp.tag == Tag::context(true, 0) || dp.tag == Tag::context(false, 0) {
+                            distribution_point =
+                                Some(GeneralNames::from_content(dp.value, config)?);
+                        } else if dp.tag == Tag::context(true, 1)
+                            || dp.tag == Tag::context(false, 1)
+                        {
+                            relative_name =
+                                Some(RelativeDistinguishedName::from_content(dp.value, config)?);
+                        }
+                    }
+                    // [1]–[5] are IMPLICIT (RFC 5280 Appendix A.1): the field's
+                    // content octets are the BOOLEAN / BIT STRING value itself.
+                    t if t == Tag::context(false, 1) => {
+                        let mut sub = Reader::new(field.value, config);
+                        only_contains_user_certs = Boolean::decode_content(&mut sub)?.value();
+                    }
+                    t if t == Tag::context(false, 2) => {
+                        let mut sub = Reader::new(field.value, config);
+                        only_contains_ca_certs = Boolean::decode_content(&mut sub)?.value();
+                    }
+                    t if t == Tag::context(false, 3) => {
+                        let mut sub = Reader::new(field.value, config);
+                        let bs = BitString::decode_content(&mut sub)?;
+                        only_some_reasons = Some(ReasonFlags::from_bit_string(&bs));
+                    }
+                    t if t == Tag::context(false, 4) => {
+                        let mut sub = Reader::new(field.value, config);
+                        indirect_crl = Boolean::decode_content(&mut sub)?.value();
+                    }
+                    t if t == Tag::context(false, 5) => {
+                        let mut sub = Reader::new(field.value, config);
+                        only_contains_attribute_certs = Boolean::decode_content(&mut sub)?.value();
+                    }
+                    _ => {}
+                }
+            }
+            Ok(IssuingDistributionPoint {
+                relative_name,
+                distribution_point,
+                only_contains_user_certs,
+                only_contains_ca_certs,
+                only_some_reasons,
+                indirect_crl,
+                only_contains_attribute_certs,
+            })
         })
     }
 }

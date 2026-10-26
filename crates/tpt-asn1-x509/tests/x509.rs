@@ -332,6 +332,12 @@ fn chain_build_and_validate_ok() {
             time: UnixTime::from_secs(1_893_196_800),
             verifier: &AcceptAll,
             max_path_length: None,
+            check_revocation: false,
+            crls: &[],
+            initial_policy_set: &[],
+            initial_explicit_policy: false,
+            initial_policy_mapping_inhibit: false,
+            initial_inhibit_any_policy: false,
         },
     )
     .expect("path validates");
@@ -350,6 +356,12 @@ fn chain_unable_to_build_without_issuer() {
             time: UnixTime::from_secs(1_893_196_800),
             verifier: &AcceptAll,
             max_path_length: None,
+            check_revocation: false,
+            crls: &[],
+            initial_policy_set: &[],
+            initial_explicit_policy: false,
+            initial_policy_mapping_inhibit: false,
+            initial_inhibit_any_policy: false,
         },
     );
     assert!(result.is_err());
@@ -373,7 +385,10 @@ fn chain_rejects_non_ca_intermediate() {
 
     let intermediates = [inter];
     let anchors = [anchor];
-    let result = build_and_validate(
+    // This helper names issuer and subject alike, so the EE also matches the anchor
+    // directly. The non-CA intermediate must never be used as an issuer: the path
+    // that validates is the direct one.
+    let path = build_and_validate(
         &ee,
         &intermediates,
         &anchors,
@@ -381,9 +396,16 @@ fn chain_rejects_non_ca_intermediate() {
             time: UnixTime::from_secs(1_893_196_800),
             verifier: &AcceptAll,
             max_path_length: None,
+            check_revocation: false,
+            crls: &[],
+            initial_policy_set: &[],
+            initial_explicit_policy: false,
+            initial_policy_mapping_inhibit: false,
+            initial_inhibit_any_policy: false,
         },
-    );
-    assert!(result.is_err());
+    )
+    .expect("direct path to the anchor validates");
+    assert_eq!(path.certs.len(), 1, "the non-CA intermediate must not be used");
 }
 
 #[test]

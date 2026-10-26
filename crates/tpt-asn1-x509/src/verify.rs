@@ -66,4 +66,23 @@ pub trait SignatureVerifier {
         message: &[u8],
         signature: &[u8],
     ) -> Result<bool, VerifyError>;
+
+    /// Like [`verify_signature`](Self::verify_signature), with the signer key's
+    /// `AlgorithmIdentifier` parameters.
+    ///
+    /// `key_params` is the full DER of the parameters, or `None` when absent. The
+    /// path validator resolves absent parameters by inheritance (RFC 5280 §7.3.3
+    /// for DSA), so a backend that needs them, such as DSA, must use this method.
+    /// The default ignores `key_params`, so existing backends keep working.
+    fn verify_signature_with_params(
+        &self,
+        sig_alg_oid: &[u8],
+        key_alg_oid: &[u8],
+        _key_params: Option<&[u8]>,
+        public_key: &[u8],
+        message: &[u8],
+        signature: &[u8],
+    ) -> Result<bool, VerifyError> {
+        self.verify_signature(sig_alg_oid, key_alg_oid, public_key, message, signature)
+    }
 }

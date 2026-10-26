@@ -19,3 +19,12 @@ tpt-asn1-core = { workspace = true }
 default = ["std", "alloc"]
 std = ["alloc"]
 alloc = []
+
+[dev-dependencies]
+# Pure-Rust test-only crypto backend (RSA PKCS#1 v1.5 and DSA signature
+# verification for the official NIST PKITS fixtures). Kept out of the public
+# dependency graph so the crate stays no_std and free of crypto primitives.
+num-bigint = "0.4"
+num-traits = "0.2"
+sha1 = "0.10"
+sha2 = "0.10"

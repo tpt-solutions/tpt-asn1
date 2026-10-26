@@ -251,7 +251,17 @@ fn pkits_4_1_valid_path() {
         &ee,
         &[],
         &anchors,
-        PathConfig { time: VALID_TIME, verifier: &AcceptAll, max_path_length: None },
+        PathConfig {
+            time: VALID_TIME,
+            verifier: &AcceptAll,
+            max_path_length: None,
+            check_revocation: false,
+            crls: &[],
+            initial_policy_set: &[],
+            initial_explicit_policy: false,
+            initial_policy_mapping_inhibit: false,
+            initial_inhibit_any_policy: false,
+        },
     );
     assert!(result.is_ok(), "valid path should validate: {:?}", result.err());
 }
@@ -275,7 +285,17 @@ fn pkits_4_1_2_2_expired() {
         &ee,
         &[],
         &anchors,
-        PathConfig { time: AFTER_EXPIRY, verifier: &AcceptAll, max_path_length: None },
+        PathConfig {
+            time: AFTER_EXPIRY,
+            verifier: &AcceptAll,
+            max_path_length: None,
+            check_revocation: false,
+            crls: &[],
+            initial_policy_set: &[],
+            initial_explicit_policy: false,
+            initial_policy_mapping_inhibit: false,
+            initial_inhibit_any_policy: false,
+        },
     );
     assert!(result.is_err(), "expired cert must be rejected");
 }
@@ -302,7 +322,17 @@ fn pkits_4_3_1_non_ca_intermediate() {
         &ee,
         &intermediates,
         &anchors,
-        PathConfig { time: VALID_TIME, verifier: &AcceptAll, max_path_length: None },
+        PathConfig {
+            time: VALID_TIME,
+            verifier: &AcceptAll,
+            max_path_length: None,
+            check_revocation: false,
+            crls: &[],
+            initial_policy_set: &[],
+            initial_explicit_policy: false,
+            initial_policy_mapping_inhibit: false,
+            initial_inhibit_any_policy: false,
+        },
     );
     assert!(result.is_err(), "non-CA intermediate must be rejected");
 }
@@ -343,7 +373,17 @@ fn pkits_4_5_1_ca_missing_keycertsign() {
         &ee,
         &intermediates,
         &anchors,
-        PathConfig { time: VALID_TIME, verifier: &AcceptAll, max_path_length: None },
+        PathConfig {
+            time: VALID_TIME,
+            verifier: &AcceptAll,
+            max_path_length: None,
+            check_revocation: false,
+            crls: &[],
+            initial_policy_set: &[],
+            initial_explicit_policy: false,
+            initial_policy_mapping_inhibit: false,
+            initial_inhibit_any_policy: false,
+        },
     );
     assert!(result.is_err(), "CA missing keyCertSign must be rejected");
 }

@@ -113,32 +113,17 @@ Release model: single v1.0 (phases below are tracking buckets, not separate publ
 - [x] Continuous `cargo-fuzz` targets for core, x509, and cms parsers — `fuzz/` standalone workspace: 7 targets (`core_tlv`, `core_universal`, `x509_certificate`, `x509_crl`, `x509_ocsp`, `cms_content_info`, `cms_signed_data`), each with a machine-validated DER/BER/CER corpus seed set; wired into CI as a `fuzz` build+smoke job on push/PR and a `fuzz-soak` scheduled job (3 min/target, crash artifacts uploaded). Note: fuzz binaries need nightly's ASan runtime, so local Windows MSVC link is blocked; Linux CI covers execution.
 - [x] OSS-Fuzz integration files staged (`oss-fuzz/build.sh`, `oss-fuzz/project.yaml`) — actual upstream submission to `google/oss-fuzz` is an external PR; fill in verifiable maintainer emails in `project.yaml` first
 - [x] Constant-time comparison audit: `constant_time_eq` used at all signature/MAC/key-id comparison sites (`verify.rs`, `chain.rs`); remaining call sites to be swept
-- [ ] Formal gate: full NIST PKITS suite passing (acceptance criteria #1)
-  - [x] Confirmed network access works from this environment; downloaded the official NIST
-        PKITS data (`PKITS_data.zip`, 405 certs + 173 CRLs) and the PKITS.pdf test-description
-        document from `csrc.nist.gov`; extracted `PKITS.pdf` to text via `pdftotext -layout`
-        (confirmed all ~16 test groups / ~250 individual test cases parse cleanly, e.g. §4.1–§4.16)
-  - [ ] Vendor `certs/` + `crls/` (~2.2MB, public-domain NIST fixtures) into
-        `crates/tpt-asn1-x509/tests/pkits_data/`
-  - [ ] Parse `PKITS.pdf`'s test tables into a structured fixture list (test name, cert/CRL
-        path components, expected valid/invalid result, any non-default policy settings)
-  - [ ] Extend `PathConfig`/`build_and_validate` (`crates/tpt-asn1-x509/src/chain.rs`) to accept
-        `initial-policy-set`, `initial-explicit-policy`, `initial-policy-mapping-inhibit`, and
-        `initial-inhibit-any-policy` inputs — currently only `time`/`verifier`/`max_path_length`
-        exist, and policy mapping / policyConstraints / inhibitAnyPolicy are parsed but only
-        lightly enforced (see module doc comment in `chain.rs`); PKITS groups 4.8–4.13 require
-        real enforcement of all four inputs to pass
-  - [ ] Add CRL-based revocation checking to the path validator (group 4.4, ~20 tests) if not
-        already wired into `build_and_validate`
-  - [ ] Add a real signature-verification backend for tests (RSA PKCS#1 v1.5 with SHA-1/SHA-256,
-        and ideally DSA for the §4.1.4/4.1.5/4.1.6 DSA tests) implementing `SignatureVerifier`
-        as a test-only dev-dependency (e.g. `rsa` + `sha1` + `sha2` crates) — the existing
-        `AcceptAll` stub verifier can't exercise the signature-verification test groups (4.1, 4.4.4)
-  - [ ] Write the data-driven harness consuming the vendored fixtures + parsed test table,
-        replacing/supplementing the current 5 known-answer tests in
-        `crates/tpt-asn1-x509/tests/pkits.rs`
-  - [ ] Wire the harness into CI as a required job (blocking gate, not just informational)
-  - [ ] Document any officially out-of-scope subset (e.g. DSA if not implemented) with rationale
+- [ ] Formal gate: full NIST PKITS suite passing (acceptance criteria #1) — **in progress**: 243 of 247 generated subcases pass; 4 known failures remain (see the open items below)
+  - [x] Confirmed network access; downloaded the official NIST PKITS data (`PKITS_data.zip`, 405 certs + 173 CRLs) and the `PKITS.pdf` test description
+  - [x] Vendored `certs/` + `crls/` into `crates/tpt-asn1-x509/tests/pkits_data/`
+  - [x] Case table generated from the PDF text: `tools/gen_pkits_cases.py` → `tests/pkits_suite.rs.in` (247 subcases; emits `Case` literals)
+  - [x] `PathConfig` takes `initial-policy-set`, `initial-explicit-policy`, `initial-policy-mapping-inhibit`, `initial-inhibit-any-policy`, `crls`, and `check_revocation`
+  - [x] Policy tree per RFC 5280 §6.1.2–6.1.5 in `src/policy.rs` (partial; see the open items below)
+  - [x] CRL revocation (RFC 5280 §6.3.3): issuer and indirect (`cRLIssuer`) matching, distribution-point and issuing-point scope, reason coverage, and CRL signers from the path or the candidate pool; delta CRLs complement their base CRL (matching CRL number, `removeFromCRL` clears a base entry)
+  - [x] Test-only signature backend in the harness: RSA PKCS#1 v1.5 (SHA-1/256/384/512) and DSA (SHA-1/256), with DSA parameter inheritance
+  - [x] Data-driven harness `tests/pkits_harness.rs` as a regression gate. It fails on any new failure and on any listed failure that starts passing. It runs as its own blocking `pkits` job in `.github/workflows/ci.yml`, and also in the workspace test job.
+  - [ ] Close the 4 known failures listed in `tests/pkits_harness.rs`: inhibitPolicyMapping §4.11.9 and §4.11.11 (the self-issued count, where §4.11.7 requires the opposite), inhibitAnyPolicy §4.12.9 (anyPolicy through a self-issued rollover), and a separate CRL-only certificate signing a CRL under the issuing CA name (§4.4.19)
+  - [ ] Document any officially out-of-scope subset with rationale (none identified yet)
 - [x] Formal gate: 100% of Cisco Umbrella Top 1M parsed without panic (acceptance criteria #2) —
       unblocked: network access confirmed working from this environment. Downloaded the real
       Umbrella Top 1M list, harvested leaf TLS certs from 7,393 of the top 10,000 domains (74%
@@ -170,12 +155,7 @@ Release model: single v1.0 (phases below are tracking buckets, not separate publ
       backend (Phase 6 `-s`), which is not yet implemented.
 
 ### External resource gates — status (best-effort this session)
-- NIST **PKITS** vectors: added a self-contained PKITS-group harness (`tpt-asn1-x509/tests/pkits.rs`)
-  with 5 known-answer tests standing in for the official fixtures. Full network access and an
-  `openssl` binary were both confirmed working in a later session (see the Umbrella corpus note
-  below), so downloading the real ~1,600 vectors from csrc.nist.gov to wire through it is no
-  longer network-blocked — remains open as unstarted implementation work (see Phase 7 checklist
-  above, most of which is still `[ ]`).
+- NIST **PKITS** vectors: the official fixtures are vendored, and `tests/pkits_harness.rs` runs all 247 generated subcases as a regression gate (243 pass; the 4 others are listed as known failures). See the Phase 7 checklist above.
 - **Cisco Umbrella Top 1M** corpus: **done** — see the Phase 7 checklist above. Network access and
   `openssl` (for TLS handshakes) both confirmed working; harvested and soak-tested 7,393 real
   certs with 0 panics, vendored a 1,200-cert regression sample.
