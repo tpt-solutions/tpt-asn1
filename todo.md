@@ -248,15 +248,15 @@ Line references are from a static read of the code and were not confirmed by run
 ### 9.7 Automation & release
 - [ ] CI: `cargo doc -D warnings` job, cargo-semver-checks, coverage (cargo-llvm-cov), Dependabot / Renovate, MSRV check wired to `rust-version`
 - [ ] Release automation: release-plz or cargo-release, cargo-dist prebuilt CLI binaries + `cargo binstall` metadata, publish dry-run job
-- [ ] `xtask` (or `justfile`) with `ci`, `pkits`, `fuzz-quick`, `gen-docs` commands
+- [x] `xtask` with `ci`, `pkits`, `docs`, `deny`, `fuzz-quick` (`cargo xtask <cmd>`)
 - [ ] criterion `benches/` (decode cert, walk TLV, chain validate) + a CI regression gate
 - [ ] Re-enable the `proptest` round-trip tests once the toolchain pin is bumped; make fuzz targets assert round-trip / differential properties, not only no-panic
 - [ ] Add `#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]` to library crates
 - [ ] Add negative-case test corpora: BOOLEAN != 0xFF, non-minimal INTEGER, BIT STRING padding, OID edge cases, time edge cases, hostile BER, SAN `otherName`, NameConstraints with min/max, real OCSP responses, CMS negative paths
 
 ### 9.8 Adoption: docs, examples, templates
-- [ ] README rewrite: feature / unsupported matrix, PKITS 243/247 claim with link, a 10-line "parse a cert" and 15-line "validate a chain" snippet, comparison vs `x509-parser` / `der` / `rasn`, security-posture and fail-closed notes, DSL section
-- [ ] Examples: CRL + OCSP checking, CMS verify with the RustCrypto backend, build a cert / CSR (after encoders), `build.rs` DSL walkthrough, `no_std` embedded example, hostile-input handling
+- [x] README rewritten: feature matrix, honest status (246/247 PKITS, no bundled signature backend, what is not implemented), verified quick starts. Still open: a DSL section
+- [~] Examples: CRL and OCSP parsing examples added (`crl_info`, `ocsp_info`). Still open: CMS verify with the RustCrypto backend, build a cert / CSR (after encoders), `build.rs` DSL walkthrough, `no_std` embedded example, hostile-input handling
 - [ ] Project template (`cargo generate` / template repo): custom ASN.1 protocol crate with `build.rs` + schema + round-trip tests + fuzz target
 - [ ] GitHub Action (`tpt-asn1-lint`) to lint certs / DER files in a repo
 - [ ] mdBook guide with cookbook ("verify S/MIME", "check a TLS chain", "write a schema"), a migration guide from `der` / `x509-parser`, and a threat-model / guarantees page
