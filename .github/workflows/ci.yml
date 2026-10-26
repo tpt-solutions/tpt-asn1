@@ -88,9 +88,13 @@ jobs:
         # Latest cargo-audit requires the edition2024 feature (Rust >= 1.85),
         # which the repo-pinned 1.81.0 toolchain cannot build. Use stable.
         uses: dtolnay/rust-toolchain@stable
-      - uses: rustsec/audit-check@v2.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: Swatinem/rust-cache@v2
+      # rust-toolchain.toml pins 1.81.0, which applies inside the checkout and
+      # cannot build cargo-audit 0.22 (needs rustc 1.88), so use +stable.
+      - name: Install cargo-audit
+        run: cargo +stable install cargo-audit --locked
+      - name: Audit dependencies
+        run: cargo audit
 
   fuzz:
     name: Fuzz targets (build + smoke)
@@ -106,7 +110,9 @@ jobs:
       - name: Install nightly toolchain
         uses: dtolnay/rust-toolchain@nightly
       - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz --locked
+        # rust-toolchain.toml pins 1.81.0, which overrides the nightly install
+        # above and cannot build cargo-fuzz's deps (edition2024), so use +nightly.
+        run: cargo +nightly install cargo-fuzz --locked
       - name: Build all fuzz targets
         run: cargo +nightly fuzz build
       - name: Smoke-run each fuzz target
@@ -129,7 +135,9 @@ jobs:
       - name: Install nightly toolchain
         uses: dtolnay/rust-toolchain@nightly
       - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz --locked
+        # rust-toolchain.toml pins 1.81.0, which overrides the nightly install
+        # above and cannot build cargo-fuzz's deps (edition2024), so use +nightly.
+        run: cargo +nightly install cargo-fuzz --locked
       - name: Soak-run each fuzz target
         run: |
           set -u

@@ -2,9 +2,9 @@
 //!
 //! Run with: `cargo run -p tpt-asn1-cms --example verify -- <message.der>`
 
-use tpt_asn1_core::decode;
 use tpt_asn1_cms::content_info::ContentInfo;
 use tpt_asn1_cms::signed_data::SignedData;
+use tpt_asn1_core::decode;
 
 fn main() {
     let path = std::env::args().nth(1).expect("usage: inspect <message.der>");

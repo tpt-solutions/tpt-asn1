@@ -4,13 +4,13 @@
 //! verification wiring (using a deterministic mock crypto backend, since no
 //! real cryptographic primitives live in this crate).
 
-use tpt_asn1_core::decode::Decode;
-use tpt_asn1_core::reader::{Config, Reader};
 use tpt_asn1_cms::content_info::ContentInfo;
 use tpt_asn1_cms::enveloped_data::EnvelopedData;
 use tpt_asn1_cms::oid;
 use tpt_asn1_cms::signed_data::SignedData;
 use tpt_asn1_cms::verify::{verify, VerificationResult};
+use tpt_asn1_core::decode::Decode;
+use tpt_asn1_core::reader::{Config, Reader};
 use tpt_asn1_x509::verify::{SignatureVerifier, VerifyError};
 
 // --- Minimal DER encoding helpers (definite lengths, DER) -------------------
