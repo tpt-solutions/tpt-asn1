@@ -68,6 +68,10 @@ mod policy;
 #[cfg(feature = "alloc")]
 pub mod verify;
 
+/// Building DER-encoded certificates. The caller supplies the signature.
+#[cfg(feature = "alloc")]
+pub mod builder;
+
 #[cfg(feature = "alloc")]
 pub use verify::{SignatureVerifier, VerifyError};
 
