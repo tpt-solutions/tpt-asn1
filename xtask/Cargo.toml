@@ -3,6 +3,7 @@ name = "xtask"
 version = "0.0.0"
 edition = "2021"
 rust-version = "1.81.0"
+license = "MIT OR Apache-2.0"
 publish = false
 description = "Developer task runner for tpt-asn1 (not published)"
 
