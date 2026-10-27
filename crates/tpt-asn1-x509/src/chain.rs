@@ -39,7 +39,7 @@ use crate::extensions::{
     key_usage_bit, CrlDistributionPoints, GeneralName, GeneralNames, NameConstraints,
 };
 use crate::name::Name;
-use crate::oid::ext;
+use crate::oid::{eku as eku_oid, ext, Oid};
 use crate::policy::{validate_policies, PolicyInputs};
 use crate::reader::Reader;
 use crate::spki::SubjectPublicKeyInfo;
@@ -113,6 +113,53 @@ pub struct PathConfig<'a> {
     pub initial_policy_mapping_inhibit: bool,
     /// `initial-inhibit-any-policy` (§6.1.1 (g)).
     pub initial_inhibit_any_policy: bool,
+    /// The key purpose the path must support (RFC 5280 §4.2.1.12). Every
+    /// certificate in the path that carries an `ExtendedKeyUsage` must list this
+    /// purpose or `anyExtendedKeyUsage`; a certificate without one places no
+    /// limit. `None` skips the check.
+    pub extended_key_usage: Option<Oid>,
+}
+
+/// A verification profile: a [`PathConfig`] preset with the purpose and the
+/// revocation defaults for one kind of certificate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Profile {
+    /// TLS server authentication (`id-kp-serverAuth`), revocation checked.
+    WebPki,
+    /// S/MIME mail protection (`id-kp-emailProtection`), revocation checked.
+    Smime,
+    /// Code signing (`id-kp-codeSigning`), revocation checked.
+    CodeSigning,
+}
+
+impl<'a> PathConfig<'a> {
+    /// A configuration for `profile`, with no policy constraints and no path-length
+    /// limit. Revocation is checked, so `crls` must cover every issuer in the
+    /// path; otherwise validation fails with [`PathError::CrlNotFound`].
+    pub fn for_profile(
+        profile: Profile,
+        time: UnixTime,
+        verifier: &'a dyn SignatureVerifier,
+        crls: &'a [CertificateList<'a>],
+    ) -> Self {
+        let purpose = match profile {
+            Profile::WebPki => eku_oid::SERVER_AUTH,
+            Profile::Smime => eku_oid::EMAIL_PROTECTION,
+            Profile::CodeSigning => eku_oid::CODE_SIGNING,
+        };
+        PathConfig {
+            time,
+            verifier,
+            max_path_length: None,
+            check_revocation: true,
+            crls,
+            initial_policy_set: &[],
+            initial_explicit_policy: false,
+            initial_policy_mapping_inhibit: false,
+            initial_inhibit_any_policy: false,
+            extended_key_usage: Some(purpose),
+        }
+    }
 }
 
 /// A successfully validated certification path: `certs[0]` is the end-entity,
@@ -148,6 +195,8 @@ pub enum PathError {
     PolicyViolation,
     /// The certificate's serial number is negative or longer than 20 octets.
     InvalidSerialNumber,
+    /// A certificate's `ExtendedKeyUsage` does not allow the required purpose.
+    ExtendedKeyUsageViolation,
     /// A certificate is listed as revoked by its issuer's CRL.
     Revoked,
     /// No CRL for the certificate's issuer was supplied.
@@ -178,6 +227,9 @@ impl core::fmt::Display for PathError {
             PathError::NameConstraintViolation => f.write_str("name constraints violation"),
             PathError::PolicyViolation => f.write_str("no acceptable certificate policy"),
             PathError::InvalidSerialNumber => f.write_str("invalid certificate serial number"),
+            PathError::ExtendedKeyUsageViolation => {
+                f.write_str("extended key usage does not allow the required purpose")
+            }
             PathError::Revoked => f.write_str("certificate is revoked"),
             PathError::CrlNotFound => f.write_str("no CRL found for certificate issuer"),
             PathError::CrlInvalid => f.write_str("CRL failed validation"),
@@ -346,6 +398,9 @@ fn validate_path<'a>(
             return Err(PathError::InvalidValidity);
         }
         check_serial_number(cert)?;
+        if let Some(purpose) = config.extended_key_usage {
+            check_extended_key_usage(cert, purpose)?;
+        }
 
         if i > 0 {
             let bc = match cert
@@ -477,6 +532,18 @@ fn check_serial_number(cert: &Certificate<'_>) -> Result<(), PathError> {
 
 /// A certificate is self-issued when its issuer and subject names match
 /// (RFC 5280 §6.1.4 (k)).
+/// RFC 5280 §4.2.1.12: a present `ExtendedKeyUsage` must allow `purpose`, either
+/// directly or through `anyExtendedKeyUsage`. An absent extension allows any use.
+fn check_extended_key_usage(cert: &Certificate<'_>, purpose: Oid) -> Result<(), PathError> {
+    let eku = cert.tbs.extensions.extended_key_usage().map_err(PathError::MalformedExtension)?;
+    match eku {
+        Some(eku) if !eku.contains(purpose) && !eku.contains(eku_oid::ANY) => {
+            Err(PathError::ExtendedKeyUsageViolation)
+        }
+        _ => Ok(()),
+    }
+}
+
 fn is_self_issued(cert: &Certificate<'_>) -> bool {
     cert.tbs.issuer.matches(&cert.tbs.subject)
 }
@@ -982,10 +1049,9 @@ fn name_constraints_hold(
         {
             return false;
         }
-        if let Some(email) = subject.find(EMAIL_ADDRESS).map(|v| v.as_bytes()) {
-            if !email_ok(nc, email) {
-                return false;
-            }
+        // Every emailAddress in the subject is checked, not only the first.
+        if subject.find_all(EMAIL_ADDRESS).any(|v| !email_ok(nc, v.as_bytes())) {
+            return false;
         }
     }
     for name in san.iter().flat_map(|s| s.names.iter()) {
@@ -1074,14 +1140,25 @@ fn uri_host(uri: &[u8]) -> Option<&[u8]> {
         Some(at) => &authority[at + 1..],
         None => authority,
     };
-    let host = match host_port.iter().position(|&b| b == b':') {
-        Some(colon) => &host_port[..colon],
-        None => host_port,
+    let host = if let Some(literal) = host_port.strip_prefix(b"[") {
+        // IP-literal (RFC 3986 §3.2.2): the host runs to the closing bracket,
+        // and the colons inside it are not a port separator.
+        let close = literal.iter().position(|&b| b == b']')?;
+        &literal[..close]
+    } else {
+        match host_port.iter().position(|&b| b == b':') {
+            Some(colon) => &host_port[..colon],
+            None => host_port,
+        }
     };
     (!host.is_empty()).then_some(host)
 }
 
 fn dns_within(child: &[u8], parent: &[u8]) -> bool {
+    // An empty constraint names no domain, so it covers no name.
+    if parent.is_empty() {
+        return false;
+    }
     // A leading dot names proper subdomains only.
     if parent.first() == Some(&b'.') {
         return child.len() > parent.len() && ends_with_ignore_case(child, parent);
@@ -1117,4 +1194,93 @@ fn ip_within(child: &[u8], parent: &[u8]) -> bool {
 
 fn masked_ip_match(child: &[u8], addr: &[u8], mask: &[u8]) -> bool {
     child.iter().zip(addr.iter().zip(mask.iter())).all(|(c, (a, m))| c & m == a & m)
+}
+
+#[cfg(test)]
+#[allow(clippy::panic)]
+mod tests {
+    use super::{check_extended_key_usage, dns_within, eku_oid, uri_host};
+    use crate::certificate::Certificate;
+    use tpt_asn1_core::decode::Decode;
+    use tpt_asn1_core::reader::{Config, Reader};
+
+    #[test]
+    fn uri_host_reads_registered_names_and_ports() {
+        assert_eq!(uri_host(b"http://example.com/a"), Some(&b"example.com"[..]));
+        assert_eq!(uri_host(b"https://user@example.com:8443/?q"), Some(&b"example.com"[..]));
+        assert_eq!(uri_host(b"ldap://"), None);
+    }
+
+    #[test]
+    fn uri_host_keeps_ipv6_literals_whole() {
+        assert_eq!(uri_host(b"https://[2001:db8::1]:443/x"), Some(&b"2001:db8::1"[..]));
+        assert_eq!(uri_host(b"https://[::1]/"), Some(&b"::1"[..]));
+        // An unterminated literal has no host.
+        assert_eq!(uri_host(b"https://[::1/"), None);
+    }
+
+    #[test]
+    fn dns_within_matches_subdomains_and_ignores_case() {
+        assert!(dns_within(b"www.Example.com", b"example.com"));
+        assert!(dns_within(b"example.com", b"example.com"));
+        assert!(!dns_within(b"badexample.com", b"example.com"));
+        assert!(dns_within(b"a.b.example.com", b".example.com"));
+        assert!(!dns_within(b"example.com", b".example.com"));
+    }
+
+    #[test]
+    fn empty_dns_constraint_covers_nothing() {
+        assert!(!dns_within(b"example.com", b""));
+        assert!(!dns_within(b"example.com.", b""));
+        assert!(!dns_within(b"", b""));
+    }
+
+    #[test]
+    fn profiles_pick_their_purpose_and_check_revocation() {
+        use super::{PathConfig, Profile};
+        use crate::time::UnixTime;
+        use crate::verify::{SignatureVerifier, VerifyError};
+        struct Never;
+        impl SignatureVerifier for Never {
+            fn digest(&self, _: &[u8], _: &[u8]) -> Result<alloc::vec::Vec<u8>, VerifyError> {
+                Err(VerifyError::UnsupportedAlgorithm)
+            }
+            fn verify_signature(
+                &self,
+                _: &[u8],
+                _: &[u8],
+                _: &[u8],
+                _: &[u8],
+                _: &[u8],
+            ) -> Result<bool, VerifyError> {
+                Err(VerifyError::UnsupportedAlgorithm)
+            }
+        }
+        let now = UnixTime::from_secs(0);
+        let cases = [
+            (Profile::WebPki, eku_oid::SERVER_AUTH),
+            (Profile::Smime, eku_oid::EMAIL_PROTECTION),
+            (Profile::CodeSigning, eku_oid::CODE_SIGNING),
+        ];
+        for (profile, purpose) in cases {
+            let config = PathConfig::for_profile(profile, now, &Never, &[]);
+            assert_eq!(config.extended_key_usage, Some(purpose));
+            assert!(config.check_revocation);
+            assert!(config.max_path_length.is_none());
+        }
+    }
+
+    #[test]
+    fn extended_key_usage_must_allow_the_purpose() {
+        let der: &[u8] =
+            include_bytes!("../tests/umbrella_corpus/1.courier-push-apple.com.akadns.net_.der");
+        let Ok(cert) = Certificate::decode(&mut Reader::new(der, Config::der())) else {
+            panic!("fixture must decode");
+        };
+        let Ok(Some(_)) = cert.tbs.extensions.extended_key_usage() else {
+            panic!("fixture is expected to carry an EKU");
+        };
+        assert!(check_extended_key_usage(&cert, eku_oid::SERVER_AUTH).is_ok());
+        assert!(check_extended_key_usage(&cert, eku_oid::EMAIL_PROTECTION).is_err());
+    }
 }

@@ -124,7 +124,11 @@ fn name() -> Vec<u8> {
 }
 
 fn certificate() -> Vec<u8> {
-    let serial = integer(&[0x01]);
+    certificate_with_serial(&[0x01])
+}
+
+fn certificate_with_serial(serial: &[u8]) -> Vec<u8> {
+    let serial = integer(serial);
     let sig_alg = seq!(oid(SHA256_RSA));
     let issuer = name();
     let validity = seq!(tlv(0x17, b"250101000000Z"), tlv(0x17, b"300101000000Z"));
@@ -390,4 +394,45 @@ fn backend_failure_marks_signer_unverifiable_instead_of_aborting() {
     let sd: SignedData<'_> = ci.decode_content().expect("SignedData decodes");
     let results = verify(&sd, &BrokenVerifier, None, &[]).expect("verify does not abort");
     assert_eq!(results, vec![VerificationResult::Unverifiable]);
+}
+
+#[test]
+fn verify_trusted_reports_signers_the_callback_rejects() {
+    let buf = content_info(&signed_data_no_signed_attrs());
+    let ci = ContentInfo::decode(&mut Reader::new(&buf, Config::der())).expect("decodes");
+    let sd: SignedData<'_> = ci.decode_content().expect("SignedData decodes");
+    let signer_der = certificate();
+
+    // The callback sees the signer's certificate DER, so it accepts only that DER.
+    let accepts_signer = |der: &[u8]| der == signer_der.as_slice();
+    let trusted =
+        tpt_asn1_cms::verify::verify_trusted(&sd, &MockVerifier, None, &[], &accepts_signer)
+            .expect("verify runs");
+    assert_eq!(trusted, vec![VerificationResult::Success]);
+
+    let rejects_all = |_: &[u8]| false;
+    let untrusted =
+        tpt_asn1_cms::verify::verify_trusted(&sd, &MockVerifier, None, &[], &rejects_all)
+            .expect("verify runs");
+    assert_eq!(untrusted, vec![VerificationResult::UntrustedSigner]);
+}
+
+#[test]
+fn decrypt_for_certificate_selects_the_matching_recipient() {
+    let buf = key_transport_enveloped_data();
+    let ci = ContentInfo::decode(&mut Reader::new(&buf, Config::der())).expect("decodes");
+    let ed: EnvelopedData<'_> = ci.decode_content().expect("EnvelopedData decodes");
+    let mock = EnvelopeMock { unwrap_fails: false, decrypt_fails: false };
+
+    let plain =
+        tpt_asn1_cms::enveloped_data::decrypt_for_certificate(&ed, &certificate(), b"key", &mock)
+            .expect("matching recipient decrypts");
+    assert_eq!(plain, b"plain");
+
+    // A certificate whose issuer and serial match no recipient is refused.
+    let other = certificate_with_serial(&[0x02]);
+    assert_eq!(
+        tpt_asn1_cms::enveloped_data::decrypt_for_certificate(&ed, &other, b"key", &mock),
+        Err(tpt_asn1_cms::error::Error::UnexpectedStructure)
+    );
 }

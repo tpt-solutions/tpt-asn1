@@ -2,15 +2,14 @@
 
 //! `tpt-asn1` — command-line ASN.1 / X.509 / CMS toolkit.
 //!
-//! Phase 6 of `todo.md`. Implements a `clap`-based CLI with:
+//! Implements a `clap`-based CLI with:
 //!
 //! - `inspect` — generic DER/BER/CER pretty-printer with PEM auto-detection
 //!   (fully implemented on `tpt-asn1-core`).
 //! - `fuzz` — differential fuzzer against OpenSSL's `asn1parse`.
-//! - `validate` / `text` — structural certificate inspection; full RFC 5280
-//!   §6.1 path validation depends on the (not-yet-integrated) `tpt-asn1-x509` crate.
-//! - `req` — CSR / self-signed generation; depends on the crypto backend and
-//!   `tpt-asn1-x509` (Phase 4), not yet available.
+//! - `validate` / `text` — structural certificate inspection. Full RFC 5280
+//!   §6.1 path validation is not wired in yet (see `todo.md`).
+//! - `req` — CSR / self-signed generation; not yet implemented (exit 2).
 //! - `completions` — shell completion generation.
 
 #![forbid(unsafe_code)]

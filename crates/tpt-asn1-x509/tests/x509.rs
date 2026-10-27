@@ -338,6 +338,7 @@ fn chain_build_and_validate_ok() {
             initial_explicit_policy: false,
             initial_policy_mapping_inhibit: false,
             initial_inhibit_any_policy: false,
+            extended_key_usage: None,
         },
     )
     .expect("path validates");
@@ -362,6 +363,7 @@ fn chain_unable_to_build_without_issuer() {
             initial_explicit_policy: false,
             initial_policy_mapping_inhibit: false,
             initial_inhibit_any_policy: false,
+            extended_key_usage: None,
         },
     );
     assert!(result.is_err());
@@ -402,6 +404,7 @@ fn chain_rejects_non_ca_intermediate() {
             initial_explicit_policy: false,
             initial_policy_mapping_inhibit: false,
             initial_inhibit_any_policy: false,
+            extended_key_usage: None,
         },
     )
     .expect("direct path to the anchor validates");

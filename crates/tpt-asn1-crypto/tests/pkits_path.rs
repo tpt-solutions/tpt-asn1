@@ -41,6 +41,7 @@ fn validate(ee_der: Vec<u8>) -> Result<(), String> {
         initial_explicit_policy: false,
         initial_policy_mapping_inhibit: false,
         initial_inhibit_any_policy: false,
+        extended_key_usage: None,
     };
     build_and_validate(target, intermediates, anchors, config)
         .map(|_| ())

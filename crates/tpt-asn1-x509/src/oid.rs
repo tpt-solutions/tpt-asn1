@@ -195,6 +195,8 @@ pub mod eku {
     pub const TIME_STAMPING: Oid = &[1, 3, 6, 1, 5, 5, 7, 3, 8];
     /// `id-kp-OCSPSigning` — 1.3.6.1.5.5.7.3.9
     pub const OCSP_SIGNING: Oid = &[1, 3, 6, 1, 5, 5, 7, 3, 9];
+    /// `anyExtendedKeyUsage` — 2.5.29.37.0 (satisfies any purpose)
+    pub const ANY: Oid = &[2, 5, 29, 37, 0];
 }
 
 /// Other PKIX OIDs.

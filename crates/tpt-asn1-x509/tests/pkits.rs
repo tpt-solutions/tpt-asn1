@@ -261,6 +261,7 @@ fn pkits_4_1_valid_path() {
             initial_explicit_policy: false,
             initial_policy_mapping_inhibit: false,
             initial_inhibit_any_policy: false,
+            extended_key_usage: None,
         },
     );
     assert!(result.is_ok(), "valid path should validate: {:?}", result.err());
@@ -295,6 +296,7 @@ fn pkits_4_1_2_2_expired() {
             initial_explicit_policy: false,
             initial_policy_mapping_inhibit: false,
             initial_inhibit_any_policy: false,
+            extended_key_usage: None,
         },
     );
     assert!(result.is_err(), "expired cert must be rejected");
@@ -332,6 +334,7 @@ fn pkits_4_3_1_non_ca_intermediate() {
             initial_explicit_policy: false,
             initial_policy_mapping_inhibit: false,
             initial_inhibit_any_policy: false,
+            extended_key_usage: None,
         },
     );
     assert!(result.is_err(), "non-CA intermediate must be rejected");
@@ -383,6 +386,7 @@ fn pkits_4_5_1_ca_missing_keycertsign() {
             initial_explicit_policy: false,
             initial_policy_mapping_inhibit: false,
             initial_inhibit_any_policy: false,
+            extended_key_usage: None,
         },
     );
     assert!(result.is_err(), "CA missing keyCertSign must be rejected");

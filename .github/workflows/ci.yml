@@ -106,6 +106,21 @@ jobs:
         with:
           command: check
 
+  # Rustdoc with warnings denied, so broken intra-doc links and missing docs fail
+  # the build. Matches `cargo xtask docs`.
+  docs:
+    name: Rustdoc (warnings denied)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build docs
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps
+
   fuzz:
     name: Fuzz targets (build + smoke)
     runs-on: ubuntu-latest

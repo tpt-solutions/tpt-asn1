@@ -455,6 +455,53 @@ impl CrlBuilder {
     }
 }
 
+/// Builds an unsigned OCSP request (RFC 6960 §4.1.1) for one or more certificates.
+///
+/// The name and key hashes are computed by the caller with its own digest backend,
+/// since this crate has no hash primitives. The request carries no requestor name,
+/// extensions, or nonce.
+#[derive(Clone, Debug, Default)]
+pub struct OcspRequestBuilder {
+    cert_ids: Vec<Vec<u8>>,
+}
+
+impl OcspRequestBuilder {
+    /// An empty request with no `CertID`s.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Ask for the status of one certificate.
+    ///
+    /// `hash_algorithm` is the digest OID (for example
+    /// [`oid::digest::SHA256`](crate::oid::digest::SHA256)) that produced both
+    /// hashes. `serial` is the serial number as big-endian bytes.
+    pub fn cert_id(
+        mut self,
+        hash_algorithm: &[u64],
+        issuer_name_hash: &[u8],
+        issuer_key_hash: &[u8],
+        serial: &[u8],
+    ) -> Self {
+        let alg = seq(&[oid(hash_algorithm), tlv(0x05, &[])]);
+        self.cert_ids.push(seq(&[
+            alg,
+            tlv(0x04, issuer_name_hash),
+            tlv(0x04, issuer_key_hash),
+            positive_integer(serial),
+        ]));
+        self
+    }
+
+    /// The DER-encoded `OCSPRequest`.
+    pub fn build(&self) -> Vec<u8> {
+        let requests: Vec<Vec<u8>> =
+            self.cert_ids.iter().map(|id| seq(core::slice::from_ref(id))).collect();
+        let tbs = seq(&[seq(&requests)]);
+        seq(&[tbs])
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::expect_used, clippy::panic)]
 mod tests {

@@ -162,6 +162,28 @@ pub fn decrypt<B: EnvelopeBackend>(
     plaintext
 }
 
+/// Decrypt `EnvelopedData` for the recipient whose certificate is `recipient_cert_der`.
+///
+/// The recipient is found by matching its certificate against each
+/// `KeyTransRecipientInfo`, so the key cannot be used against an entry meant for
+/// someone else. Otherwise this is [`decrypt`]. If no entry matches the certificate,
+/// the result is [`Error::UnexpectedStructure`].
+#[cfg(feature = "alloc")]
+pub fn decrypt_for_certificate<B: EnvelopeBackend>(
+    ed: &EnvelopedData<'_>,
+    recipient_cert_der: &[u8],
+    private_key_der: &[u8],
+    backend: &B,
+) -> Result<alloc::vec::Vec<u8>> {
+    let cert = crate::cert::extract_cert_fields(recipient_cert_der)?;
+    let index = ed
+        .recipient_infos
+        .iter()
+        .position(|r| r.as_key_trans().is_some_and(|k| k.rid.matches_cert(&cert)))
+        .ok_or(Error::UnexpectedStructure)?;
+    decrypt(ed, index, private_key_der, backend)
+}
+
 /// Overwrite `buf` with zeros. This is best effort: the compiler fence stops
 /// the optimizer from removing the stores, but copies made by the backend are
 /// outside this function's control.

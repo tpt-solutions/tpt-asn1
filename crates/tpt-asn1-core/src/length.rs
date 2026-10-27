@@ -86,10 +86,10 @@ impl Length {
                     first_octet.get_or_insert(b);
                     value = (value << 8) | b as usize;
                 }
-                // DER requires the shortest possible length encoding: reject
-                // long forms for values < 0x80 and any leading zero octet
-                // (e.g. `82 00 80` must be encoded as `81 80`).
-                if r.config().rule == crate::EncodingRule::Der
+                // DER and CER require the shortest possible length encoding:
+                // reject long forms for values < 0x80 and any leading zero
+                // octet (e.g. `82 00 80` must be encoded as `81 80`).
+                if r.config().rule != crate::EncodingRule::Ber
                     && (value < 0x80 || first_octet == Some(0))
                 {
                     return Err(Error::NonMinimalLength);

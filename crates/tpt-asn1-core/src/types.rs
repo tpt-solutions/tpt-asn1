@@ -34,7 +34,8 @@ impl Boolean {
         let b = bytes[0];
         match b {
             0x00 => Ok(Boolean(false)),
-            v if rule == crate::EncodingRule::Der => {
+            // DER and CER (X.690 §11.1) require TRUE to be exactly 0xFF.
+            v if rule != crate::EncodingRule::Ber => {
                 if v == 0xFF {
                     Ok(Boolean(true))
                 } else {
@@ -257,9 +258,16 @@ impl<'a> OctetString<'a> {
     }
 }
 
+/// Longest primitive string CER allows; longer content must use the
+/// constructed, 1000-octet-segmented form (X.690 §9.2).
+const CER_MAX_PRIMITIVE_STRING: usize = 1000;
+
 impl<'a> Decode<'a> for OctetString<'a> {
     fn decode(r: &mut Reader<'a>) -> Result<Self> {
         let bytes = read_primitive(r, Tag::universal(Tag::OCTET_STRING))?;
+        if r.config().rule == EncodingRule::Cer && bytes.len() > CER_MAX_PRIMITIVE_STRING {
+            return Err(Error::Custom("CER primitive OCTET STRING exceeds 1000 octets"));
+        }
         Ok(OctetString(bytes))
     }
 }

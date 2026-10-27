@@ -2,10 +2,10 @@
 
 //! Minimal OCSP request / response parsing and matching (RFC 6960).
 //!
-//! Scope (per Phase 4 item 78): this module *parses* OCSP structures and lets a
+//! Scope: this module *parses* OCSP structures and lets a
 //! caller match a `CertID` to a `SingleResponse`. It does **not** fetch
 //! responses or perform the signature verification itself — that is delegated
-//! to the [`SignatureVerifier`](crate::verify::SignatureVerifier) backend via
+//! to the [`crate::verify::SignatureVerifier`] backend via
 //! the `tbsResponseData` bytes exposed here.
 
 use alloc::vec::Vec;
@@ -18,8 +18,10 @@ use tpt_asn1_core::tag::Tag;
 use tpt_asn1_core::types::{BitString, Enumerated, Integer, OctetString};
 
 use crate::algorithm::AlgorithmIdentifier;
+use crate::certificate::Certificate;
 use crate::oid;
 use crate::time::Time;
+use crate::verify::{SignatureVerifier, VerifyError};
 
 /// An OCSP `CertID` — identifies a cert by issuer name/key hashes + serial.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -328,4 +330,47 @@ pub fn decode_basic_response(bytes: &[u8]) -> Result<BasicOcspResponse<'_>> {
 /// Returns `true` if `response_type` is the OCSP basic response type.
 pub fn is_basic_response_type(response_type: &[u8]) -> bool {
     oid::oid_eq_bytes(response_type, oid::pkix::OCSP)
+}
+
+/// Verify the signature on a `BasicOCSPResponse` against `responder`'s public key
+/// (RFC 6960 §4.2.2.2). The signature covers the raw `tbsResponseData` bytes.
+///
+/// This checks the signature only. Also check that the signer may sign for the
+/// issuer with [`is_authorized_responder`], and validate `responder` itself, for
+/// example with [`chain::build_and_validate`](crate::chain::build_and_validate).
+pub fn verify_response_signature<B: SignatureVerifier>(
+    basic: &BasicOcspResponse<'_>,
+    responder: &Certificate<'_>,
+    backend: &B,
+) -> core::result::Result<bool, VerifyError> {
+    let spki = &responder.tbs.subject_public_key_info;
+    let params = spki.algorithm.parameters.as_ref().map(|p| p.full);
+    backend.verify_signature_with_params(
+        basic.signature_algorithm.algorithm.as_bytes(),
+        spki.algorithm.algorithm.as_bytes(),
+        params,
+        spki.subject_public_key.data,
+        basic.tbs_response_data_der,
+        basic.signature,
+    )
+}
+
+/// Whether `responder` may sign OCSP responses for `issuer` (RFC 6960 §4.2.2.2).
+///
+/// It may if it is the issuer itself, identified by the same public key, or if it
+/// is a delegated responder: issued under the issuer's name and carrying the
+/// `id-kp-OCSPSigning` extended key usage. This check does not verify the
+/// signature that links the delegated responder to the issuer.
+pub fn is_authorized_responder(responder: &Certificate<'_>, issuer: &Certificate<'_>) -> bool {
+    let responder_key = responder.tbs.subject_public_key_info.subject_public_key.data;
+    let issuer_key = issuer.tbs.subject_public_key_info.subject_public_key.data;
+    if responder_key == issuer_key {
+        return true;
+    }
+    let issued_by_issuer = responder.tbs.issuer.der_eq(&issuer.tbs.subject);
+    let delegated = matches!(
+        responder.tbs.extensions.extended_key_usage(),
+        Ok(Some(eku)) if eku.contains(oid::eku::OCSP_SIGNING)
+    );
+    issued_by_issuer && delegated
 }

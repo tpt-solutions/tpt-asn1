@@ -3,7 +3,7 @@
 //! `tpt-asn1-x509` — X.509v3 certificate parsing, validation, and chain building.
 //!
 //! This crate is built on top of [`tpt_asn1_core`]. The pluggable cryptographic
-//! backend ([`verify::SignatureVerifier`]) is defined here (Phase 4 item 75)
+//! backend ([`verify::SignatureVerifier`]) is defined here
 //! and reused by `tpt-asn1-cms` for CMS signature verification.
 //!
 //! ## Layout
@@ -57,14 +57,16 @@ pub mod crl;
 #[cfg(feature = "alloc")]
 pub mod extensions;
 #[cfg(feature = "alloc")]
+pub mod hostname;
+#[cfg(feature = "alloc")]
 pub mod name;
 #[cfg(feature = "alloc")]
 pub mod ocsp;
 #[cfg(feature = "alloc")]
 mod policy;
 
-/// Pluggable cryptographic backend used for signature verification (Phase 4
-/// item 75). `tpt-asn1-cms` reuses this same trait for CMS signature verification.
+/// Pluggable cryptographic backend used for signature verification.
+/// `tpt-asn1-cms` reuses this same trait for CMS signature verification.
 #[cfg(feature = "alloc")]
 pub mod verify;
 

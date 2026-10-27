@@ -82,6 +82,7 @@ fn built_certificate_is_a_valid_one_anchor_path() {
         initial_explicit_policy: false,
         initial_policy_mapping_inhibit: false,
         initial_inhibit_any_policy: false,
+        extended_key_usage: None,
     };
     // A self-signed trust anchor is its own target: the path is just the anchor.
     let result = build_and_validate(cert, &[], anchors, config);

@@ -347,6 +347,7 @@ fn validate(case: &Case) -> Result<(), String> {
         initial_explicit_policy: case.explicit,
         initial_policy_mapping_inhibit: case.inhibit_mapping,
         initial_inhibit_any_policy: case.inhibit_any,
+        extended_key_usage: None,
     };
     build_and_validate(target, intermediates, anchors, config)
         .map(|_| ())

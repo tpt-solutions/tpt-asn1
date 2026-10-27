@@ -54,3 +54,9 @@ tpt-asn1 fuzz < input.der         # Run built-in differential fuzzer against Ope
 2. Successfully parses 100% of certificates in the Cisco Umbrella Top 1M without panicking.
 3. Zero `unsafe` blocks in the core DER parsing path.
 4. Differential testing confirms exact byte-for-byte parity with OpenSSL's DER output.
+
+### Status (as of 2026-10-27, from todo.md)
+1. **Not met.** 246 of 247 PKITS subcases pass. §4.4.19 is open: the CRL-signing certificate rule that separates it from §4.4.21 is not yet identified. Gate: `crates/tpt-asn1-x509/tests/pkits_harness.rs`, run as the CI `pkits` job.
+2. **Met, with a caveat.** 7,393 live certificates from the top 10,000 domains decoded with 0 panics and 0 unexpected rejections. A 1,200-certificate sample is vendored and runs in `cargo test`. The full 1M list has not been soaked.
+3. **Met per the record, not re-checked.** `#![forbid(unsafe_code)]` is set on core, x509 and cms.
+4. **Met for canonical DER round-trip.** `crates/tpt-asn1-x509/tests/der_parity.rs` re-encodes 405 PKITS and 1,200 Umbrella certificates with the core TLV codec and with `openssl x509 -inform DER -outform DER` (OpenSSL 3.2.2). All 1,605 outputs match, and the core output equals the input for each. The test skips with a notice if `openssl` is not on PATH, so CI must install it. The test covers the round-trip only, not OpenSSL-generated structures from other operations.

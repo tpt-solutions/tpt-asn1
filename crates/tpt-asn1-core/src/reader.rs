@@ -150,6 +150,21 @@ impl<'a> Reader<'a> {
     pub fn read_tlv(&mut self) -> Result<(Tag, Length, &'a [u8])> {
         let tag = self.read_tag()?;
         let length = self.read_length()?;
+        if self.config.rule == EncodingRule::Cer {
+            // X.690 §9.1: constructed encodings use the indefinite form and
+            // primitive encodings use the definite form.
+            match (tag.constructed, length) {
+                (true, Length::Definite(_)) => {
+                    return Err(Error::Custom(
+                        "CER constructed encoding must use indefinite length",
+                    ))
+                }
+                (false, Length::Indefinite) => {
+                    return Err(Error::Custom("CER primitive encoding must use definite length"))
+                }
+                _ => {}
+            }
+        }
         match length {
             Length::Definite(n) => {
                 if n > self.config.max_element_size {

@@ -3,7 +3,7 @@
 //! Signature verification over `SignedData` (RFC 5652 §5.4 / RFC 2315 §7).
 //!
 //! This reuses the pluggable [`SignatureVerifier`](tpt_asn1_x509::verify::SignatureVerifier)
-//! backend defined in `tpt-asn1-x509` (Phase 4 item 75): no cryptographic primitives
+//! backend defined in `tpt-asn1-x509`: no cryptographic primitives
 //! live in this crate. For each `SignerInfo` we:
 //!
 //! 1. locate the signing certificate among the embedded/`extra` set by matching
@@ -25,6 +25,9 @@ use tpt_asn1_core::tag::Tag;
 use tpt_asn1_core::types::{ObjectIdentifier, OctetString};
 use tpt_asn1_core::util::constant_time_eq;
 
+/// A caller-supplied check on a signer's certificate DER (see [`verify_trusted`]).
+type TrustCheck<'a> = dyn Fn(&[u8]) -> bool + 'a;
+
 /// Per-signer verification outcome.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum VerificationResult {
@@ -39,6 +42,9 @@ pub enum VerificationResult {
     /// The backend could not check this signer at all: an unsupported algorithm,
     /// an unparsable key, or an internal error. Other signers are still checked.
     Unverifiable,
+    /// The signature verified, but the trust check given to [`verify_trusted`]
+    /// rejected the signer's certificate.
+    UntrustedSigner,
 }
 
 /// Verify every `SignerInfo` in `sd`.
@@ -57,7 +63,8 @@ pub enum VerificationResult {
 /// signature over the content. It does **not** establish that the signer's
 /// certificate is trusted: this function does no chain building, validity or
 /// key-usage checks. Validate the signer certificate with
-/// `tpt_asn1_x509::chain::build_and_validate` before relying on the result.
+/// `tpt_asn1_x509::chain::build_and_validate` before relying on the result, or use
+/// [`verify_trusted`], which runs that check as a callback.
 ///
 /// Returns [`Error::AmbiguousContent`] if the message has embedded `eContent`
 /// and `external_content` is also supplied.
@@ -67,6 +74,40 @@ pub fn verify<B: tpt_asn1_x509::verify::SignatureVerifier>(
     backend: &B,
     external_content: Option<&[u8]>,
     extra_certs: &[&[u8]],
+) -> Result<alloc::vec::Vec<VerificationResult>> {
+    verify_with(sd, backend, external_content, extra_certs, None)
+}
+
+/// Verify every `SignerInfo` in `sd`, and also ask `is_trusted` about each signer
+/// whose signature checks out.
+///
+/// `is_trusted` receives the DER of the signer's certificate and returns whether
+/// the caller trusts it. A certificate it rejects gives
+/// [`VerificationResult::UntrustedSigner`] rather than `Success`. Pass a closure
+/// that builds and validates the path, for example with
+/// `tpt_asn1_x509::chain::build_and_validate`. The other arguments are as for
+/// [`verify`].
+///
+/// Only a signer whose signature verifies reaches `is_trusted`. The check does
+/// not run for a bad digest or signature, so those results are unchanged.
+#[cfg(feature = "alloc")]
+pub fn verify_trusted<B: tpt_asn1_x509::verify::SignatureVerifier>(
+    sd: &SignedData<'_>,
+    backend: &B,
+    external_content: Option<&[u8]>,
+    extra_certs: &[&[u8]],
+    is_trusted: &dyn Fn(&[u8]) -> bool,
+) -> Result<alloc::vec::Vec<VerificationResult>> {
+    verify_with(sd, backend, external_content, extra_certs, Some(is_trusted))
+}
+
+#[cfg(feature = "alloc")]
+fn verify_with<B: tpt_asn1_x509::verify::SignatureVerifier>(
+    sd: &SignedData<'_>,
+    backend: &B,
+    external_content: Option<&[u8]>,
+    extra_certs: &[&[u8]],
+    trust: Option<&TrustCheck<'_>>,
 ) -> Result<alloc::vec::Vec<VerificationResult>> {
     use alloc::vec::Vec;
 
@@ -81,7 +122,7 @@ pub fn verify<B: tpt_asn1_x509::verify::SignatureVerifier>(
 
     let mut out = Vec::with_capacity(sd.signer_infos.len());
     for signer in &sd.signer_infos {
-        out.push(verify_signer(sd, signer, backend, external_content, &certs)?);
+        out.push(verify_signer(sd, signer, backend, external_content, &certs, trust)?);
     }
     Ok(out)
 }
@@ -119,6 +160,7 @@ fn verify_signer<B: tpt_asn1_x509::verify::SignatureVerifier>(
     backend: &B,
     external_content: Option<&[u8]>,
     certs: &[&[u8]],
+    trust: Option<&TrustCheck<'_>>,
 ) -> Result<VerificationResult> {
     // 1. Determine the content to digest / sign over. A message must carry
     // either embedded eContent or detached content, never both: preferring one
@@ -157,17 +199,17 @@ fn verify_signer<B: tpt_asn1_x509::verify::SignatureVerifier>(
     };
 
     // 2. Locate the signing certificate.
-    let mut matched: Option<cert::CertFields<'_>> = None;
+    let mut matched: Option<(&[u8], cert::CertFields<'_>)> = None;
     for der in certs {
         match cert::extract_cert_fields(der) {
             Ok(fields) if signer.matches_cert(&fields) => {
-                matched = Some(fields);
+                matched = Some((*der, fields));
                 break;
             }
             _ => continue,
         }
     }
-    let fields = match matched {
+    let (signer_der, fields) = match matched {
         Some(f) => f,
         None => return Ok(VerificationResult::NoMatchingCertificate),
     };
@@ -182,7 +224,10 @@ fn verify_signer<B: tpt_asn1_x509::verify::SignatureVerifier>(
         signer.signature,
     );
     match verdict {
-        Ok(true) => Ok(VerificationResult::Success),
+        Ok(true) => match trust {
+            Some(is_trusted) if !is_trusted(signer_der) => Ok(VerificationResult::UntrustedSigner),
+            _ => Ok(VerificationResult::Success),
+        },
         Ok(false) => Ok(VerificationResult::SignatureInvalid),
         Err(_) => Ok(VerificationResult::Unverifiable),
     }

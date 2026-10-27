@@ -35,6 +35,23 @@ pub enum RecipientIdentifier<'a> {
     SubjectKeyIdentifier(&'a [u8]),
 }
 
+impl RecipientIdentifier<'_> {
+    /// Constant-time match of this recipient identifier against an extracted
+    /// certificate, as for [`SignerInfo::matches_cert`](crate::signer_info::SignerInfo::matches_cert).
+    pub fn matches_cert(&self, cert: &crate::cert::CertFields<'_>) -> bool {
+        match self {
+            RecipientIdentifier::SubjectKeyIdentifier(id) => match cert.subject_key_id {
+                Some(ski) => tpt_asn1_core::util::constant_time_eq(ski, id),
+                None => false,
+            },
+            RecipientIdentifier::IssuerAndSerialNumber { issuer, serial } => {
+                tpt_asn1_core::util::constant_time_eq(cert.issuer, issuer)
+                    && tpt_asn1_core::util::constant_time_eq(cert.serial, serial)
+            }
+        }
+    }
+}
+
 /// `KeyTransRecipientInfo` — RSA (or similar) public-key key transport.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct KeyTransRecipientInfo<'a> {

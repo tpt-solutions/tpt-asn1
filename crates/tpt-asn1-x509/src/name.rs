@@ -222,6 +222,19 @@ impl<'a> Name<'a> {
         self.rdns.iter().find_map(|rdn| rdn.find(expected))
     }
 
+    /// Every value of the attribute type `expected`, in DN order. A
+    /// multi-valued or repeated attribute yields more than one item.
+    pub fn find_all<'s>(
+        &'s self,
+        expected: oid::Oid,
+    ) -> impl Iterator<Item = &'s AttributeValue<'a>> + 's {
+        self.rdns
+            .iter()
+            .flat_map(|rdn| rdn.attributes.iter())
+            .filter(move |a| oid::oid_eq(&a.type_id, expected))
+            .map(|a| &a.value)
+    }
+
     /// The number of `RelativeDistinguishedName`s.
     pub fn rdn_count(&self) -> usize {
         self.rdns.len()
